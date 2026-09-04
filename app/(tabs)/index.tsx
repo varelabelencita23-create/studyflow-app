@@ -1,13 +1,17 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, EmptyState, ProgressBar } from '@/components/ui';
+import { useAppState } from '@/store';
 import { colors, spacing, typography } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
 
 export default function HomeScreen() {
+  const { user } = useAppState();
+  const firstName = user?.fullName?.trim().split(' ')[0] || 'ahí';
+
   return (
     <Screen scroll>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Hola, Vare 👋</Text>
+        <Text style={styles.greeting}>Hola, {firstName} 👋</Text>
         <Text style={styles.subtitle}>Semana del 1 al 7 de septiembre</Text>
       </View>
 

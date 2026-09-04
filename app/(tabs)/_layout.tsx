@@ -1,7 +1,8 @@
 import { BlurView } from 'expo-blur';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { Platform, StyleSheet } from 'react-native';
 import { Icon, IconName } from '@/components/ui/Icon';
+import { useAppState } from '@/store';
 import { colors } from '@/theme';
 
 interface TabIconConfig {
@@ -18,6 +19,12 @@ const TAB_ICONS: Record<string, TabIconConfig> = {
 };
 
 export default function TabsLayout() {
+  const { onboardingCompleted } = useAppState();
+
+  if (!onboardingCompleted) {
+    return <Redirect href="/welcome" />;
+  }
+
   return (
     <Tabs
       screenOptions={({ route }) => ({

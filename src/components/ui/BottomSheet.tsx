@@ -1,5 +1,13 @@
 import { ReactNode, useEffect } from 'react';
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -78,7 +86,9 @@ export function BottomSheet({ visible, onClose, children, maxHeightPercent = 0.8
             ]}
           >
             <View style={styles.handle} />
-            {children}
+            <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', default: undefined })}>
+              {children}
+            </KeyboardAvoidingView>
           </Animated.View>
         </GestureDetector>
       </View>

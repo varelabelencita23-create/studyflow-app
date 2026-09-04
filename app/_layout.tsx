@@ -11,10 +11,34 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SplashView } from '@/components/SplashView';
 import { ToastProvider } from '@/components/ui/Toast';
+import { AppStateProvider, useAppState } from '@/store';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function RootNavigator() {
+  const { isLoading } = useAppState();
+
+  if (isLoading) {
+    return <SplashView />;
+  }
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+        animation: 'slide_from_right',
+      }}
+    >
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(onboarding)" />
+      <Stack.Screen name="design-system" options={{ presentation: 'card' }} />
+    </Stack>
+  );
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -37,19 +61,12 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ToastProvider>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.background },
-              animation: 'slide_from_right',
-            }}
-          >
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="design-system" options={{ presentation: 'card' }} />
-          </Stack>
-        </ToastProvider>
+        <AppStateProvider>
+          <ToastProvider>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </ToastProvider>
+        </AppStateProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
