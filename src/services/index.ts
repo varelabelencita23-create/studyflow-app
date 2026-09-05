@@ -1,3 +1,4 @@
+export * from './achievementsService';
 export * from './authService';
 export * from './contentPlanService';
 export * from './contentService';
@@ -5,7 +6,9 @@ export * from './driveService';
 export * from './examService';
 export * from './fileService';
 export * from './flashcardService';
+export * from './insightsService';
 export * from './onboardingService';
+export * from './preferencesService';
 export * from './quizService';
 export * from './sessionService';
 export * from './statsService';

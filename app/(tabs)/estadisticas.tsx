@@ -1,13 +1,52 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ActivityHeatmap, BarChart, ProgressRing, RankedBarList } from '@/components/charts';
-import { Card, EmptyState, Icon } from '@/components/ui';
+import { Card, EmptyState, Icon, IconName } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
-import { statsService, StatsOverview, SubjectTimeBreakdown } from '@/services';
+import {
+  achievementsService,
+  insightsService,
+  statsService,
+  StatsOverview,
+  SubjectTimeBreakdown,
+} from '@/services';
 import { useAppState } from '@/store';
-import { colors, spacing, typography } from '@/theme';
+import { colors, radius, spacing, typography } from '@/theme';
+import { Achievement, AppNotification, NotificationKind } from '@/types';
 import { formatDuration, WEEK_DAYS, getTodayWeekDayIndex } from '@/utils';
+
+const INSIGHT_ICON: Record<NotificationKind, IconName> = {
+  streak: 'flame',
+  'exam-alert': 'alert-circle',
+  insight: 'sparkles-outline',
+  reminder: 'notifications-outline',
+  system: 'information-circle-outline',
+};
+
+const INSIGHT_TONE: Record<NotificationKind, string> = {
+  streak: colors.warning,
+  'exam-alert': colors.danger,
+  insight: colors.accent,
+  reminder: colors.accent,
+  system: colors.textSecondary,
+};
+
+const INSIGHT_ICON_BG: Record<NotificationKind, string> = {
+  streak: colors.warningSubtle,
+  'exam-alert': colors.dangerSubtle,
+  insight: colors.accentSubtle,
+  reminder: colors.accentSubtle,
+  system: colors.surfaceHighlight,
+};
+
+const ACHIEVEMENT_ICON: Record<Achievement['kind'], IconName> = {
+  'first-session': 'flag-outline',
+  'streak-7': 'flame-outline',
+  'streak-30': 'trophy-outline',
+  'subject-completed': 'ribbon-outline',
+  'perfect-week': 'star-outline',
+};
 
 const EMPTY_OVERVIEW: StatsOverview = {
   todayMinutes: 0,
@@ -19,24 +58,32 @@ const EMPTY_OVERVIEW: StatsOverview = {
 };
 
 export default function EstadisticasScreen() {
-  const { subjects } = useAppState();
+  const { subjects, weeklyPlan } = useAppState();
   const [overview, setOverview] = useState<StatsOverview>(EMPTY_OVERVIEW);
   const [dailyActivity, setDailyActivity] = useState<{ date: string; minutes: number }[]>([]);
   const [timeBreakdown, setTimeBreakdown] = useState<SubjectTimeBreakdown[]>([]);
   const [weekPoints, setWeekPoints] = useState<{ date: string; minutes: number }[]>([]);
+  const [insights, setInsights] = useState<AppNotification[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
 
   const load = useCallback(async () => {
-    const [overviewResult, weekActivity, heatmapActivity, breakdown] = await Promise.all([
-      statsService.getOverview(),
-      statsService.getDailyActivity(7),
-      statsService.getDailyActivity(70),
-      statsService.getSubjectTimeBreakdown(),
-    ]);
+    const activeSubjects = subjects.filter((subject) => !subject.archived);
+    const [overviewResult, weekActivity, heatmapActivity, breakdown, insightsResult, achievementsResult] =
+      await Promise.all([
+        statsService.getOverview(),
+        statsService.getDailyActivity(7),
+        statsService.getDailyActivity(70),
+        statsService.getSubjectTimeBreakdown(),
+        insightsService.getInsights(),
+        achievementsService.evaluateAndUnlock({ subjects: activeSubjects, weeklyPlan }),
+      ]);
     setOverview(overviewResult);
     setTimeBreakdown(breakdown);
     setDailyActivity(heatmapActivity);
     setWeekPoints(weekActivity);
-  }, []);
+    setInsights(insightsResult);
+    setAchievements(achievementsResult);
+  }, [subjects, weeklyPlan]);
 
   useFocusEffect(
     useCallback(() => {
@@ -99,6 +146,25 @@ export default function EstadisticasScreen() {
         />
       ) : (
         <>
+          {insights.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.insightsRow}
+              style={styles.insightsScroll}
+            >
+              {insights.map((insight) => (
+                <Card key={insight.id} variant="elevated" style={styles.insightCard}>
+                  <View style={[styles.insightIcon, { backgroundColor: INSIGHT_ICON_BG[insight.kind] }]}>
+                    <Icon name={INSIGHT_ICON[insight.kind]} size={18} color={INSIGHT_TONE[insight.kind]} />
+                  </View>
+                  <Text style={styles.insightTitle} numberOfLines={2}>{insight.title}</Text>
+                  <Text style={styles.insightBody} numberOfLines={3}>{insight.body}</Text>
+                </Card>
+              ))}
+            </ScrollView>
+          )}
+
           <Card variant="elevated" style={styles.heroCard}>
             <View style={styles.heroRow}>
               <ProgressRing progress={overallProgress} label="Avance general" />
@@ -143,6 +209,29 @@ export default function EstadisticasScreen() {
               <RankedBarList items={subjectRows} />
             )}
           </Card>
+
+          <Card variant="surface" style={styles.section}>
+            <Text style={styles.sectionTitle}>Logros</Text>
+            <View style={styles.achievementsGrid}>
+              {achievements.map((achievement) => {
+                const unlocked = !!achievement.unlockedAt;
+                return (
+                  <View key={achievement.id} style={styles.achievementTile}>
+                    <View style={[styles.achievementIcon, unlocked && styles.achievementIconUnlocked]}>
+                      <Icon
+                        name={ACHIEVEMENT_ICON[achievement.kind]}
+                        size={22}
+                        color={unlocked ? colors.accent : colors.textTertiary}
+                      />
+                    </View>
+                    <Text style={[styles.achievementTitle, !unlocked && styles.achievementTitleLocked]} numberOfLines={2}>
+                      {achievement.title}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </Card>
         </>
       )}
     </Screen>
@@ -170,6 +259,33 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...typography.subheadline,
+    color: colors.textSecondary,
+  },
+  insightsScroll: {
+    marginBottom: spacing.lg,
+  },
+  insightsRow: {
+    gap: spacing.md,
+    paddingRight: spacing.md,
+  },
+  insightCard: {
+    width: 220,
+    gap: spacing.sm,
+  },
+  insightIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightTitle: {
+    ...typography.subheadline,
+    color: colors.textPrimary,
+    fontFamily: typography.headline.fontFamily,
+  },
+  insightBody: {
+    ...typography.footnote,
     color: colors.textSecondary,
   },
   heroCard: {
@@ -238,6 +354,35 @@ const styles = StyleSheet.create({
   },
   emptyHint: {
     ...typography.subheadline,
+    color: colors.textTertiary,
+  },
+  achievementsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.lg,
+  },
+  achievementTile: {
+    width: 78,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  achievementIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceHighlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  achievementIconUnlocked: {
+    backgroundColor: colors.accentSubtle,
+  },
+  achievementTitle: {
+    ...typography.caption1,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  achievementTitleLocked: {
     color: colors.textTertiary,
   },
 });

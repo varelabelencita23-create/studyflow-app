@@ -40,6 +40,8 @@ export const STORAGE_KEYS = {
   quizzes: 'studyflow/quizzes',
   quizQuestions: 'studyflow/quiz-questions',
   quizAttempts: 'studyflow/quiz-attempts',
+  preferences: 'studyflow/preferences',
+  achievements: 'studyflow/achievements',
 } as const;
 
 function delay(ms: number) {

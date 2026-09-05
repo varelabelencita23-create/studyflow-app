@@ -28,6 +28,7 @@ interface AppStateContextValue {
   login: (email: string, password: string) => Promise<User>;
   register: (fullName: string, email: string, password: string) => Promise<User>;
   sendPasswordReset: (email: string) => Promise<void>;
+  updateUser: (patch: Partial<Pick<User, 'fullName' | 'email'>>) => Promise<User>;
 
   addSubject: (input: SubjectInput) => Promise<Subject>;
   updateSubject: (id: string, patch: Partial<SubjectInput>) => Promise<void>;
@@ -97,6 +98,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendPasswordReset = useCallback((email: string) => authService.sendPasswordReset(email), []);
+
+  const updateUser = useCallback(async (patch: Partial<Pick<User, 'fullName' | 'email'>>) => {
+    const updated = await authService.updateUser(patch);
+    setUser(updated);
+    return updated;
+  }, []);
 
   const addSubject = useCallback(
     async (input: SubjectInput) => {
@@ -203,6 +210,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       login,
       register,
       sendPasswordReset,
+      updateUser,
       addSubject,
       updateSubject,
       removeSubject,
@@ -226,6 +234,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       login,
       register,
       sendPasswordReset,
+      updateUser,
       addSubject,
       updateSubject,
       removeSubject,

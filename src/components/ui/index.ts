@@ -13,4 +13,5 @@ export * from './Screen';
 export * from './SegmentedTabs';
 export * from './SelectableCard';
 export * from './Skeleton';
+export * from './Switch';
 export * from './Toast';

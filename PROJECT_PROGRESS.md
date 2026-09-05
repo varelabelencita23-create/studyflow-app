@@ -1,5 +1,47 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapas completadas: 15 — Perfil y configuración, 16 — Insights
+
+A pedido del usuario ("vale ahora 15 y 16"), se hicieron juntas. Con las 17 etapas del spec original, esta deja pendiente solo la 17 (Pulido final). Mismo criterio de siempre: verificación (`tsc` + `expo export` Android/iOS) después de cada etapa individual, y `git diff` de cada archivo ya existente tocado para confirmar que los cambios fueran aditivos.
+
+### Funcionalidades implementadas
+
+**Etapa 15 — Perfil y configuración** (tab `Perfil`, reescrito)
+- **Editar perfil**: tocar la tarjeta de perfil abre un `BottomSheet` (nombre + email) que llama a `authService.updateUser` — ya existía en el servicio desde la Etapa 1 pero nunca se había wireado a ninguna pantalla; se agregó `updateUser` a `AppStateProvider`.
+- **Modalidad de estudio** (`/perfil/modalidad`): la pantalla de onboarding (`study-mode.tsx`) ya prometía en su propio texto "vas a poder cambiarlo cuando quieras" — esta etapa cumple esa promesa con una pantalla nueva que reusa el mismo patrón de `SelectableCard` + stepper, pero guarda y vuelve atrás en vez de continuar el onboarding.
+- **Notificaciones** (mock): dos switches — "Recordatorio diario" y "Alertas de parciales" — persistidos en `preferencesService.ts`. No hay push notifications reales (haría falta `expo-notifications` + flujo de permisos, fuera de alcance), pero la preferencia queda guardada para cuando se conecte esa integración real; documentado como tal en el servicio.
+- Se construyó `Switch` (`src/components/ui/Switch.tsx`) como primitiva nueva del sistema de diseño, ya que no existía ningún toggle — pista/thumb animados con Reanimated, mismo patrón que el resto de los componentes `ui/`.
+
+**Etapa 16 — Insights** (dos secciones nuevas arriba del dashboard de Estadísticas)
+- Antes de escribir código se revisaron los tipos ya definidos desde la Etapa 1 en `src/types/notification.ts` (`AppNotification` con `kind: 'insight'`, y `Achievement`/`AchievementKind` con sus 5 variantes) y `src/types/stats.ts` (`StudyStats.bestStreakDays`) — quedó claro que esta etapa estaba pensada exactamente para poblar esos tipos con datos reales, así que se construyó sobre ellos en vez de inventar una forma nueva.
+- **Insights** (`insightsService.ts`): carrusel horizontal de tarjetas con hallazgos derivados — racha activa (≥3 días), el parcial más urgente con ritmo real atrasado (reusa `examService.getReadiness`), la materia con más tiempo dedicado, el día de la semana históricamente más productivo, y la tendencia semanal (±15% o más contra la semana anterior, comparando dos ventanas de 7 días de `statsService.getDailyActivity(14)`). Cada insight solo aparece si su condición es significativa — nada de contenido de relleno con una cuenta vacía.
+- **Logros** (`achievementsService.ts`): los 5 `AchievementKind` ya tipados — primera sesión, racha de 7 días, racha de 30 días, materia completada al 100%, y "semana perfecta" (heurística simplificada y documentada: solo se certifica los domingos, y solo si cada día planificado de la semana actual tuvo una sesión real de la materia correspondiente en su fecha exacta). Se agregó `statsService.getBestStreakDays()` (racha máxima histórica, no solo la actual) porque los logros de racha deben basarse en el pico alcanzado, no en el estado del momento. Un logro desbloqueado se persiste con su fecha y queda para siempre, aunque la condición deje de cumplirse después.
+- Se agregó `addDaysToISODate` a `src/utils/week.ts` (aditivo) para calcular la fecha calendario exacta de cada día planificado de la semana, necesario para la heurística de "semana perfecta".
+
+### Archivos importantes creados
+
+- `src/services/preferencesService.ts`, `achievementsService.ts`, `insightsService.ts`.
+- `src/components/ui/Switch.tsx`.
+- `app/perfil/modalidad.tsx`.
+- Modificados (aditivos, ver `git diff` en la verificación): `src/services/storage.ts` (+2 claves), `src/services/index.ts` (+3 exports), `src/services/statsService.ts` (+`getBestStreakDays`), `src/store/AppStateProvider.tsx` (+`updateUser`), `src/utils/week.ts` (+`addDaysToISODate`), `src/components/ui/index.ts` (+1 export), `app/_layout.tsx` (registro de la ruta `perfil/modalidad`). Reescritos (deliberado, extensión sobre el archivo existente, no reemplazo): `app/(tabs)/perfil.tsx` y `app/(tabs)/estadisticas.tsx`.
+
+### Problemas encontrados y solucionados
+
+1. Ninguno nuevo esta vez — se revisó preventivamente el mismo patrón de riesgo de etapas anteriores (un `setState` con datos parciales seguido de un `await`) y no aparece en ninguna pantalla nueva: tanto `perfil.tsx` como `estadisticas.tsx` juntan sus datos con `Promise.all` antes de actualizar cualquier estado.
+2. Se evitó una duplicación: al escribir `insightsService.ts` se creó por error un helper local `formatMinutes` que reimplementaba `formatDuration` (ya existente en `src/utils/format.ts`) — se detectó en la propia revisión de código antes de verificar con `tsc`, y se reemplazó por el util existente.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` → sin errores, verificado después de la Etapa 15 y otra vez después de la Etapa 16 completa.
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso en ambos checkpoints.
+- `git diff --stat` y revisión línea por línea de cada archivo ya existente tocado, confirmando que los cambios fueran aditivos (las únicas reescrituras — Perfil y Estadísticas — son extensiones deliberadas del archivo existente, no reemplazos: se revisaron las líneas eliminadas una por una y todas son imports/firmas ampliadas, ninguna lógica perdida).
+
+### Siguiente etapa
+
+**Etapa 17 — Pulido final** (última etapa del spec original): la única que queda pendiente.
+
+---
+
 ## Etapas completadas: 12 — Tests, 14 — Estadísticas
 
 A pedido explícito del usuario ("con cuidado y perfección"), se retomó la Etapa 12 (Tests, salteada antes) y se hizo la Etapa 14 (Estadísticas) con un pedido puntual: gráficos estilo iOS que transmitan de verdad el avance general y el de cada materia. Mismo criterio de siempre: verificación (`tsc` + `expo export` Android/iOS) después de cada etapa individual, y revisión de `git diff` de todo archivo ya existente tocado para confirmar que los cambios fueran aditivos.

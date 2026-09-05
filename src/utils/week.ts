@@ -41,6 +41,14 @@ export function getTodayWeekDayKey(date: Date = new Date()): WeekDay {
   return WEEK_DAYS[getTodayWeekDayIndex(date)].key;
 }
 
+/** Adds `days` (can be negative) to an ISO date (yyyy-mm-dd), returning an ISO date. */
+export function addDaysToISODate(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return toISODate(date);
+}
+
 export function formatWeekRangeLabel(weekStartISO: string): string {
   const [year, month, day] = weekStartISO.split('-').map(Number);
   const start = new Date(year, month - 1, day);

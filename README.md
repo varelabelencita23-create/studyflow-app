@@ -2,7 +2,7 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 14 — Estadísticas** completada (incluye Etapa 12 — Tests). Las 14 etapas del spec original están terminadas. Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **Etapa 16 — Insights** completada (incluye Etapa 15 — Perfil y configuración). Frontend-only, sin backend todavía (mocks persistidos localmente).
 
 ## Stack
 
@@ -46,7 +46,9 @@ app/                        # Rutas (Expo Router)
     materias.tsx                # Materias
     parciales.tsx                # Parciales
     estadisticas.tsx               # Estadísticas
-    perfil.tsx                       # Perfil (incluye reset de onboarding para QA)
+    perfil.tsx                       # Perfil: editar perfil, modalidad, notificaciones, reset de onboarding (QA)
+  perfil/
+    modalidad.tsx                # Cambiar modalidad de estudio después del onboarding
   (onboarding)/               # Flujo de alta (splash lo maneja _layout.tsx)
     _layout.tsx
     welcome.tsx                 # Bienvenida
@@ -85,8 +87,8 @@ app/                        # Rutas (Expo Router)
 
 src/
   theme/          # Colores, tipografía, spacing, radios, sombras (design tokens)
-  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ + content/ + exams/ + charts/
-  services/       # Capa mock (auth, materias, contenidos, sesiones, plan de contenidos, archivos, Drive, parciales, flashcards, tests, estadísticas, onboarding, plan semanal, storage)
+  components/     # SplashView + ui/ (librería reutilizable, incluye Switch) + planner/ + subjects/ + content/ + exams/ + charts/
+  services/       # Capa mock (auth, materias, contenidos, sesiones, plan de contenidos, archivos, Drive, parciales, flashcards, tests, estadísticas, insights, logros, preferencias, onboarding, plan semanal, storage)
   store/          # AppStateProvider (estado global) + ActiveSessionProvider (timer en curso)
   hooks/          # Hooks compartidos (ej. useToast)
   types/          # Entidades de dominio (preparadas para Supabase)
@@ -209,6 +211,17 @@ El tab **Estadísticas** (antes un placeholder de la Etapa 1) es un dashboard de
 
 Todo sale de `statsService.ts`, que agrega las `StudySession` reales (no hay datos inventados: sin sesiones, los gráficos muestran ceros).
 
+## Insights y logros
+
+Arriba del dashboard de Estadísticas, dos secciones más de gamificación/analítica derivada, ambas calculadas a partir de datos reales (nunca inventadas):
+
+- **Insights** (`insightsService.ts`): un carrusel horizontal de tarjetas con hallazgos puntuales — racha activa (a partir de 3 días), el parcial más urgente cuyo ritmo real está atrasado (reusa `examService.getReadiness`), la materia a la que más tiempo le dedicaste, tu día de la semana históricamente más productivo, y la tendencia de esta semana vs. la anterior (±15% o más). Cada insight se muestra solo si la condición es realmente significativa — sin sesiones o sin parciales atrasados, el carrusel simplemente no aparece.
+- **Logros** (`achievementsService.ts`): 5 logros fijos (`Achievement` de `src/types/notification.ts`) — primera sesión, racha de 7 días, racha de 30 días, materia completada al 100% y "semana perfecta" (cumpliste todos los días planificados de la semana, certificado solo el domingo). Una vez desbloqueado un logro se persiste con su fecha y queda desbloqueado para siempre, aunque la condición deje de cumplirse después (ej. se corta la racha).
+
+## Perfil y configuración
+
+Desde el tab **Perfil**: tocar la tarjeta de perfil abre un `BottomSheet` para editar nombre y email (`authService.updateUser`, wireado en `AppStateProvider`). La sección **Configuración** tiene **Modalidad de estudio** (`/perfil/modalidad`, la misma pantalla que en el onboarding pero para cambiarla después, tal como promete su propio texto: "vas a poder cambiarlo cuando quieras") y **Notificaciones** con dos switches mock (recordatorio diario, alertas de parciales) persistidos en `preferencesService.ts` — no hay push notifications reales todavía (haría falta `expo-notifications` + permisos), pero la preferencia ya se guarda para cuando se conecte esa integración.
+
 ## Modelo de datos
 
 `src/types` define las entidades de dominio de forma independiente de cualquier backend: `User`, `Subject`, `Unit`/`Topic`/`Subtopic`, `StudySession`, `WeeklyPlan`, `Exam`, `StudyMaterial`/`Folder`, `Flashcard`/`FlashcardDeck`, `Quiz`/`QuizQuestion`, `StudyStats`, `AppNotification`, `Achievement`. Estos tipos van a ser consumidos tanto por los mocks (próximas etapas) como, más adelante, por una capa de servicios conectada a Supabase, sin necesidad de reescribir la UI.
@@ -229,8 +242,8 @@ Todo sale de `statsService.ts`, que agrega las `StudySession` reales (no hay dat
 12. ~~Tests~~ ✅
 13. ~~Calendario global de parciales~~ ✅
 14. ~~Estadísticas~~ ✅
-15. Perfil y configuración
-16. Insights
+15. ~~Perfil y configuración~~ ✅
+16. ~~Insights~~ ✅
 17. Pulido final
 
 Ver `PROJECT_PROGRESS.md` para el detalle de lo realizado en cada etapa.

@@ -96,6 +96,29 @@ async function getDailyActivity(days: number): Promise<DailyActivityPoint[]> {
   return points;
 }
 
+/** Longest run of consecutive active days across all recorded history (not just the current streak). */
+async function getBestStreakDays(): Promise<number> {
+  const sessions = await sessionService.listAll();
+  const activeDates = new Set<string>();
+  for (const session of sessions) {
+    if (session.durationSeconds <= 0) continue;
+    activeDates.add(toISODateOnly(session.date));
+  }
+  if (activeDates.size === 0) return 0;
+
+  const sortedDates = Array.from(activeDates).sort();
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < sortedDates.length; i++) {
+    const previousDate = new Date(sortedDates[i - 1]);
+    const thisDate = new Date(sortedDates[i]);
+    const diffDays = Math.round((thisDate.getTime() - previousDate.getTime()) / (1000 * 60 * 60 * 24));
+    run = diffDays === 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+  }
+  return best;
+}
+
 async function getSubjectTimeBreakdown(): Promise<SubjectTimeBreakdown[]> {
   const sessions = await sessionService.listAll();
   const bySubject = new Map<string, { seconds: number; count: number }>();
@@ -118,5 +141,6 @@ async function getSubjectTimeBreakdown(): Promise<SubjectTimeBreakdown[]> {
 export const statsService = {
   getOverview,
   getDailyActivity,
+  getBestStreakDays,
   getSubjectTimeBreakdown,
 };
