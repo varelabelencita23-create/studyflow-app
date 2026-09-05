@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, EmptyState, ProgressBar } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
@@ -6,6 +7,7 @@ import { colors, radius, spacing, typography } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
 
 export default function MateriasScreen() {
+  const router = useRouter();
   const { subjects } = useAppState();
   const { show } = useToast();
 
@@ -29,7 +31,7 @@ export default function MateriasScreen() {
       ) : (
         <View style={styles.list}>
           {sortedSubjects.map((subject) => (
-            <Card key={subject.id} variant="surface" onPress={() => show('El detalle de materia llega en la próxima etapa', 'default')}>
+            <Card key={subject.id} variant="surface" onPress={() => router.push(`/materia/${subject.id}`)}>
               <View style={styles.subjectRow}>
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{subject.shortName.slice(0, 2)}</Text>

@@ -36,6 +36,7 @@ function RootNavigator() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(onboarding)" />
       <Stack.Screen name="design-system" options={{ presentation: 'card' }} />
+      <Stack.Screen name="materia/[id]" options={{ presentation: 'card' }} />
     </Stack>
   );
 }

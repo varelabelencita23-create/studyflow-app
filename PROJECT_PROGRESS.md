@@ -1,5 +1,42 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapa completada: 3 — Home / Planificador semanal
+
+### Funcionalidades implementadas
+
+- **Inicio real**: saludo + rango de la semana actual (calculado, no hardcodeado), tarjeta de resumen con "X de 7 días planificados" (progreso real derivado del plan semanal).
+- **Chips arrastrables de materias** (`DraggableSubjectChip`): una por cada materia seleccionada para la semana, con badge de cantidad de días asignados. Implementadas con `Gesture.Pan` + `measure()` sobre `useAnimatedRef` (sin tocar el hilo de JS por frame) para detectar sobre qué día se soltó la materia; el chip vuelve a su posición con un spring tras cada suelte, con haptics al iniciar el arrastre y al soltar sobre un día válido.
+- **Lista de 7 días** (`WeekDayRow`): cada día muestra un estado vacío (borde punteado, "Soltá una materia acá") o la materia asignada como tarjeta blanca/texto negro (según el spec de las tarjetas de materia). Un anillo animado resalta el día bajo el dedo mientras se arrastra, tanto si está vacío como si ya tiene una materia (permite reemplazarla). Botón "×" para desasignar sin arrastrar.
+- **Selector de materias de la semana** (`WeekSubjectPicker`, bottom sheet): solo aparece si el usuario tiene más materias que el máximo de su modalidad de estudio; permite elegir cuáles están activas, respetando el tope.
+- **Contexto de materia** (`app/materia/[id].tsx`): al tocar una materia asignada (desde el planificador o desde la tab Materias) se entra a una pantalla con nombre, progreso, días asignados esta semana y accesos (vista previa) a Contenidos/Plan de estudio/Archivos/Parciales/Flashcards/Tests, que se implementarán en la Etapa 5.
+- **Persistencia por semana** (`weeklyPlanService`): el plan se guarda con clave `studyflow/weekly-plan/<lunes-de-la-semana-ISO>`, con materias seleccionadas y asignaciones día→materia; se crea automáticamente al completar el onboarding (o de forma perezosa si hiciera falta).
+
+### Archivos importantes creados
+
+- `src/utils/week.ts` — `WEEK_DAYS`, `getWeekStartISO`, `getTodayWeekDayIndex`/`Key`, `formatWeekRangeLabel`.
+- `src/services/weeklyPlanService.ts` — `getOrCreate`, `setSelectedSubjects`, `assignSubject`, `clearDay`.
+- `src/components/planner/DraggableSubjectChip.tsx`, `WeekDayRow.tsx`, `WeekSubjectPicker.tsx`.
+- `app/materia/[id].tsx` (nueva ruta dinámica, registrada en `app/_layout.tsx`).
+- Modificados: `src/store/AppStateProvider.tsx` (estado `weekStartDate`/`weeklyPlan` + acciones), `app/(tabs)/index.tsx` (reescrita como planificador real), `app/(tabs)/materias.tsx` (navega al contexto de materia).
+
+### Problemas encontrados y solucionados
+
+1. **Los tipos de rutas de Expo Router no se regeneran con `expo export`** (ya documentado en la Etapa 2, se repitió al agregar `materia/[id].tsx`). Solución: correr `npx expo start` brevemente para forzar el escaneo de `app/` y regenerar `.expo/types/router.d.ts` antes de tipar con `tsc`.
+2. **El resaltado de "hover" durante el arrastre solo aparecía en los días vacíos**, no al arrastrar sobre un día ya asignado (caso válido: reemplazar la materia de ese día). Solución: se movió el anillo animado (`borderColor` animado con Reanimated) al contenedor exterior de `WeekDayRow` (el mismo que se mide con `measure()`), en vez de aplicarlo solo al estado vacío interno.
+3. **Acceso bloqueado a `docs.expo.dev`** (instrucción del proyecto en `AGENTS.md` pide leer los docs versionados de Expo antes de escribir código): el proxy de red del entorno bloquea ese dominio, igual que bloqueaba `api.expo.dev` en la Etapa 1. Se continuó con el mismo enfoque que ya había probado ser confiable: verificar los tipos reales instalados en `node_modules` (p. ej. `measure()`/`AnimatedRef` de `react-native-reanimated`) y validar todo con `tsc` + `expo export` en vez de depender de la documentación online.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` → sin errores (con los tipos de rutas regenerados tras agregar `materia/[id].tsx`).
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso, incluyendo los nuevos gestos/worklets.
+- Revisión manual de la lógica de arrastre: alineación de índices entre `dayRefs`/`WEEK_DAYS`/`WeekDayRow`, un único `hoveredDayIndex` compartido entre los 7 días y todos los chips, y verificación de que `measure()` mide el contenedor correcto (el que envuelve tanto el estado vacío como la tarjeta asignada).
+
+### Siguiente etapa
+
+**Etapa 4 — Sesiones de estudio**: detalle de sesión, iniciar/pausar/reanudar/finalizar con timer, selección de contenidos estudiados, y resumen de sesión (tiempo estudiado, progreso anterior vs. nuevo, objetivo cumplido). Datos mock/almacenamiento local, sin Supabase todavía.
+
+---
+
 ## Etapa completada: 2 — Onboarding
 
 ### Funcionalidades implementadas

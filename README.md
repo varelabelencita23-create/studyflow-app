@@ -2,7 +2,7 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 2 — Onboarding** completada. Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **Etapa 3 — Home / Planificador semanal** completada. Frontend-only, sin backend todavía (mocks persistidos localmente).
 
 ## Stack
 
@@ -55,16 +55,18 @@ app/                        # Rutas (Expo Router)
     subjects.tsx                   # Tus materias (agregar/editar/eliminar/ordenar)
     study-mode.tsx                  # Modalidad de estudio (Estándar/Profundo/Libre)
     complete.tsx                     # Configuración completada
+  materia/
+    [id].tsx                    # Contexto de una materia (accesos a Contenidos/Plan/Archivos/...)
 
 src/
   theme/          # Colores, tipografía, spacing, radios, sombras (design tokens)
-  components/     # SplashView + components/ui (librería reutilizable)
-  services/       # Capa mock (authService, subjectsService, onboardingService, storage)
-  store/          # AppStateProvider — estado global (sesión, materias, modalidad)
+  components/     # SplashView + ui/ (librería reutilizable) + planner/ (planificador semanal)
+  services/       # Capa mock (auth, materias, onboarding, plan semanal, storage)
+  store/          # AppStateProvider — estado global (sesión, materias, modalidad, plan semanal)
   hooks/          # Hooks compartidos (ej. useToast)
   types/          # Entidades de dominio (preparadas para Supabase)
   constants/      # Constantes de layout y app
-  utils/          # Helpers (ids, validadores)
+  utils/          # Helpers (ids, validadores, fechas de la semana)
 ```
 
 ### Alias de importación
@@ -105,6 +107,15 @@ Al abrir la app, `app/_layout.tsx` muestra un **splash** animado mientras `AppSt
 
 Todo se persiste con `@react-native-async-storage/async-storage` a través de `src/services` (mock de auth y de materias), así que cerrar y reabrir la app conserva el progreso. Desde **Perfil → Reiniciar onboarding** podés volver a recorrer el flujo completo para QA.
 
+## Home / Planificador semanal
+
+El tab **Inicio** es el planificador semanal real (no un calendario de horarios): arriba se muestran chips arrastrables con las materias seleccionadas para la semana (con la cantidad de días asignados como badge), y debajo una lista de los 7 días donde soltar cada materia. Detalles de implementación:
+
+- El drag & drop usa `react-native-gesture-handler` (`Gesture.Pan`) + `react-native-reanimated` (`measure()` sobre `useAnimatedRef`) para detectar en qué día se soltó la materia sin pasar por el hilo de JS en cada frame — el chip vuelve a su lugar con un spring tras cada suelte.
+- Si tenés más materias que el máximo de tu modalidad de estudio, un botón "Editar" abre un selector (`WeekSubjectPicker`) para elegir cuáles están activas esta semana.
+- Tocar una materia asignada navega a `/materia/[id]`, el "contexto" de esa materia (progreso, días asignados, accesos a Contenidos/Plan de estudio/Archivos/Parciales/Flashcards/Tests — todavía como vista previa hasta la Etapa 5).
+- Todo se persiste por semana (`weeklyPlanService`, clave `studyflow/weekly-plan/<lunes-de-la-semana>`) para que cerrar y reabrir la app conserve la distribución.
+
 ## Modelo de datos
 
 `src/types` define las entidades de dominio de forma independiente de cualquier backend: `User`, `Subject`, `Unit`/`Topic`/`Subtopic`, `StudySession`, `WeeklyPlan`, `Exam`, `StudyMaterial`/`Folder`, `Flashcard`/`FlashcardDeck`, `Quiz`/`QuizQuestion`, `StudyStats`, `AppNotification`, `Achievement`. Estos tipos van a ser consumidos tanto por los mocks (próximas etapas) como, más adelante, por una capa de servicios conectada a Supabase, sin necesidad de reescribir la UI.
@@ -113,7 +124,7 @@ Todo se persiste con `@react-native-async-storage/async-storage` a través de `s
 
 1. ~~Foundation + Design System~~ ✅
 2. ~~Onboarding (splash, login/registro, selección de materias, modalidad de estudio)~~ ✅
-3. Home / Planificador semanal (drag & drop de materias sobre los días)
+3. ~~Home / Planificador semanal (drag & drop de materias sobre los días)~~ ✅
 4. Sesiones de estudio (timer, pausas, resumen)
 5. Materias (home de materia, accesos a contenidos/plan/archivos/parciales/flashcards/tests)
 6. Contenidos jerárquicos (unidad → tema → subtema)

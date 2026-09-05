@@ -5,8 +5,10 @@ import {
   onboardingService,
   StudyModeConfig,
   subjectsService,
+  weeklyPlanService,
 } from '@/services';
-import { Subject, User } from '@/types';
+import { ID, Subject, User, WeekDay, WeeklyPlan } from '@/types';
+import { getWeekStartISO } from '@/utils';
 
 interface SubjectInput {
   name: string;
@@ -20,6 +22,8 @@ interface AppStateContextValue {
   subjects: Subject[];
   studyModeConfig: StudyModeConfig;
   onboardingCompleted: boolean;
+  weekStartDate: string;
+  weeklyPlan: WeeklyPlan | null;
 
   login: (email: string, password: string) => Promise<User>;
   register: (fullName: string, email: string, password: string) => Promise<User>;
@@ -33,6 +37,10 @@ interface AppStateContextValue {
   setStudyModeConfig: (config: StudyModeConfig) => Promise<void>;
   completeOnboarding: () => Promise<void>;
   resetOnboarding: () => Promise<void>;
+
+  setWeekSelectedSubjects: (subjectIds: ID[]) => Promise<void>;
+  assignSubjectToDay: (day: WeekDay, subjectId: ID) => Promise<void>;
+  clearDayAssignment: (day: WeekDay) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -43,6 +51,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [studyModeConfig, setStudyModeConfigState] = useState<StudyModeConfig>(DEFAULT_STUDY_MODE_CONFIG);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [weekStartDate] = useState(() => getWeekStartISO());
+  const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -56,9 +66,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setSubjects(subjectList);
       setStudyModeConfigState(modeConfig);
       setOnboardingCompleted(completed);
+
+      if (completed) {
+        const plan = await weeklyPlanService.getOrCreate(
+          weekStartDate,
+          session?.id ?? 'guest',
+          subjectList.map((subject) => subject.id),
+          modeConfig.maxSubjectsPerWeek,
+        );
+        setWeeklyPlan(plan);
+      }
+
       setIsLoading(false);
     })();
-  }, []);
+  }, [weekStartDate]);
 
   const login = useCallback(async (email: string, password: string) => {
     const loggedInUser = await authService.login({ email, password });
@@ -105,8 +126,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const completeOnboarding = useCallback(async () => {
     await onboardingService.complete();
+    const plan = await weeklyPlanService.getOrCreate(
+      weekStartDate,
+      user?.id ?? 'guest',
+      subjects.map((subject) => subject.id),
+      studyModeConfig.maxSubjectsPerWeek,
+    );
+    setWeeklyPlan(plan);
     setOnboardingCompleted(true);
-  }, []);
+  }, [weekStartDate, user, subjects, studyModeConfig]);
 
   const resetOnboarding = useCallback(async () => {
     await onboardingService.reset();
@@ -114,7 +142,46 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setSubjects([]);
     setStudyModeConfigState(DEFAULT_STUDY_MODE_CONFIG);
     setOnboardingCompleted(false);
+    setWeeklyPlan(null);
   }, []);
+
+  const ensurePlan = useCallback(async () => {
+    if (weeklyPlan) return weeklyPlan;
+    const plan = await weeklyPlanService.getOrCreate(
+      weekStartDate,
+      user?.id ?? 'guest',
+      subjects.map((subject) => subject.id),
+      studyModeConfig.maxSubjectsPerWeek,
+    );
+    setWeeklyPlan(plan);
+    return plan;
+  }, [weeklyPlan, weekStartDate, user, subjects, studyModeConfig]);
+
+  const setWeekSelectedSubjects = useCallback(
+    async (subjectIds: ID[]) => {
+      await ensurePlan();
+      const next = await weeklyPlanService.setSelectedSubjects(weekStartDate, subjectIds);
+      if (next) setWeeklyPlan(next);
+    },
+    [ensurePlan, weekStartDate],
+  );
+
+  const assignSubjectToDay = useCallback(
+    async (day: WeekDay, subjectId: ID) => {
+      await ensurePlan();
+      const next = await weeklyPlanService.assignSubject(weekStartDate, day, subjectId);
+      if (next) setWeeklyPlan(next);
+    },
+    [ensurePlan, weekStartDate],
+  );
+
+  const clearDayAssignment = useCallback(
+    async (day: WeekDay) => {
+      const next = await weeklyPlanService.clearDay(weekStartDate, day);
+      if (next) setWeeklyPlan(next);
+    },
+    [weekStartDate],
+  );
 
   const value = useMemo<AppStateContextValue>(
     () => ({
@@ -123,6 +190,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       subjects,
       studyModeConfig,
       onboardingCompleted,
+      weekStartDate,
+      weeklyPlan,
       login,
       register,
       sendPasswordReset,
@@ -133,6 +202,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setStudyModeConfig,
       completeOnboarding,
       resetOnboarding,
+      setWeekSelectedSubjects,
+      assignSubjectToDay,
+      clearDayAssignment,
     }),
     [
       isLoading,
@@ -140,6 +212,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       subjects,
       studyModeConfig,
       onboardingCompleted,
+      weekStartDate,
+      weeklyPlan,
       login,
       register,
       sendPasswordReset,
@@ -150,6 +224,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setStudyModeConfig,
       completeOnboarding,
       resetOnboarding,
+      setWeekSelectedSubjects,
+      assignSubjectToDay,
+      clearDayAssignment,
     ],
   );
 
