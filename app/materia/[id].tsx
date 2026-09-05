@@ -23,7 +23,7 @@ export default function SubjectDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { subjects, weeklyPlan } = useAppState();
-  const { activeSession, startSession } = useActiveSession();
+  const { activeSession } = useActiveSession();
   const { show } = useToast();
 
   const subject = subjects.find((item) => item.id === id);
@@ -168,7 +168,6 @@ export default function SubjectDetailScreen() {
               else if (item.key === 'parciales') router.push(`/materia/${subject.id}/parciales`);
               else if (item.key === 'flashcards') router.push(`/materia/${subject.id}/flashcards`);
               else if (item.key === 'tests') router.push(`/materia/${subject.id}/tests`);
-              else show('Disponible en una próxima etapa', 'default');
             }}
           >
             <View style={styles.accessIcon}>

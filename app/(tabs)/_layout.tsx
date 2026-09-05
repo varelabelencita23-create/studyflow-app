@@ -3,7 +3,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { Platform, StyleSheet } from 'react-native';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { useAppState } from '@/store';
-import { colors } from '@/theme';
+import { colors, fontFamily, spacing, typography } from '@/theme';
 
 interface TabIconConfig {
   focused: IconName;
@@ -65,18 +65,18 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    backgroundColor: Platform.select({ ios: 'transparent', default: 'rgba(10,10,12,0.97)' }),
+    backgroundColor: Platform.select({ ios: 'transparent', default: colors.tabBarFallback }),
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     height: Platform.select({ ios: 88, default: 64 }),
-    paddingTop: 8,
+    paddingTop: spacing.sm,
   },
   tabBarItem: {
-    paddingTop: 2,
+    paddingTop: spacing.xxs,
   },
   tabBarLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    marginTop: 2,
+    fontFamily: fontFamily.medium,
+    fontSize: typography.caption2.fontSize,
+    marginTop: spacing.xxs,
   },
 });

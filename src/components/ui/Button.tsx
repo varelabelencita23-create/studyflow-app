@@ -112,7 +112,7 @@ export function Button({
 const VARIANT_STYLES: Record<ButtonVariant, { container: ViewStyle; textColor: string }> = {
   primary: {
     container: { backgroundColor: colors.accent },
-    textColor: '#FFFFFF',
+    textColor: colors.textPrimary,
   },
   secondary: {
     container: {

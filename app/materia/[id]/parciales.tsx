@@ -1,7 +1,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Badge, EmptyState, Icon } from '@/components/ui';
+import { Badge, EmptyState, Icon, SkeletonCard } from '@/components/ui';
 import { ExamFormSheet } from '@/components/exams';
 import { Screen } from '@/components/ui/Screen';
 import { examService } from '@/services';
@@ -23,11 +23,14 @@ export default function ParcialesBancoScreen() {
 
   const subject = subjects.find((item) => item.id === subjectId);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [createVisible, setCreateVisible] = useState(false);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!subjectId) return;
-    examService.listBySubject(subjectId).then(setExams);
+    const examList = await examService.listBySubject(subjectId);
+    setExams(examList);
+    setIsLoading(false);
   }, [subjectId]);
 
   useFocusEffect(
@@ -68,7 +71,12 @@ export default function ParcialesBancoScreen() {
         </Pressable>
       </View>
 
-      {exams.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.yearList}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : exams.length === 0 ? (
         <EmptyState
           icon="document-text-outline"
           title="Todavía no agregaste parciales"

@@ -2,7 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ActivityHeatmap, BarChart, ProgressRing, RankedBarList } from '@/components/charts';
-import { Card, EmptyState, Icon, IconName } from '@/components/ui';
+import { Card, EmptyState, Icon, IconName, SkeletonCard } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import {
   achievementsService,
@@ -65,6 +65,7 @@ export default function EstadisticasScreen() {
   const [weekPoints, setWeekPoints] = useState<{ date: string; minutes: number }[]>([]);
   const [insights, setInsights] = useState<AppNotification[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
     const activeSubjects = subjects.filter((subject) => !subject.archived);
@@ -83,6 +84,7 @@ export default function EstadisticasScreen() {
     setWeekPoints(weekActivity);
     setInsights(insightsResult);
     setAchievements(achievementsResult);
+    setIsLoading(false);
   }, [subjects, weeklyPlan]);
 
   useFocusEffect(
@@ -138,7 +140,13 @@ export default function EstadisticasScreen() {
         <Text style={styles.subtitle}>Tu avance real, materia por materia</Text>
       </View>
 
-      {!hasAnyData && activeSubjects.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.skeletonStack}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : !hasAnyData && activeSubjects.length === 0 ? (
         <EmptyState
           icon="bar-chart-outline"
           title="Todavía no hay datos"
@@ -260,6 +268,9 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.subheadline,
     color: colors.textSecondary,
+  },
+  skeletonStack: {
+    gap: spacing.md,
   },
   insightsScroll: {
     marginBottom: spacing.lg,

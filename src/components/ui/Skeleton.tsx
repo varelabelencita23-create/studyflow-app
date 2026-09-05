@@ -7,7 +7,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { colors, radius } from '@/theme';
+import { colors, radius, spacing } from '@/theme';
 
 interface SkeletonProps {
   width?: DimensionValue;
@@ -49,7 +49,7 @@ export function SkeletonCard() {
       <Skeleton width={44} height={44} borderRadius={radius.md} />
       <Animated.View style={styles.cardText}>
         <Skeleton width="70%" height={14} />
-        <Skeleton width="45%" height={12} style={{ marginTop: 8 }} />
+        <Skeleton width="45%" height={12} style={{ marginTop: spacing.sm }} />
       </Animated.View>
     </Animated.View>
   );
@@ -59,8 +59,8 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 16,
+    gap: spacing.md,
+    padding: spacing.lg,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
   },

@@ -2,7 +2,7 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 16 — Insights** completada (incluye Etapa 15 — Perfil y configuración). Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **Etapa 17 — Pulido final** completada. Las 17 etapas del spec original están terminadas. Frontend-only, sin backend todavía (mocks persistidos localmente).
 
 ## Stack
 
@@ -244,6 +244,6 @@ Desde el tab **Perfil**: tocar la tarjeta de perfil abre un `BottomSheet` para e
 14. ~~Estadísticas~~ ✅
 15. ~~Perfil y configuración~~ ✅
 16. ~~Insights~~ ✅
-17. Pulido final
+17. ~~Pulido final~~ ✅
 
 Ver `PROJECT_PROGRESS.md` para el detalle de lo realizado en cada etapa.

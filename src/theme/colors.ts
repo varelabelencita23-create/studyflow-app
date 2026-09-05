@@ -10,6 +10,8 @@ export const colors = {
   surface: '#161618',
   surfaceElevated: '#1E1E22',
   surfaceHighlight: '#26262B',
+  /** Android/web fallback behind the bottom tab bar (no real blur there, unlike iOS). */
+  tabBarFallback: 'rgba(11,11,13,0.97)',
 
   // Borders
   border: 'rgba(255,255,255,0.08)',
@@ -40,6 +42,7 @@ export const colors = {
   onLightSurface: '#FFFFFF',
   onLightText: '#0A0A0C',
   onLightTextSecondary: '#6B6B72',
+  onLightOverlaySubtle: 'rgba(10,10,12,0.06)',
 
   overlay: 'rgba(0,0,0,0.6)',
   overlaySoft: 'rgba(0,0,0,0.35)',

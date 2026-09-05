@@ -1,7 +1,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Badge, BottomSheet, Button, Card, EmptyState, Icon } from '@/components/ui';
+import { Badge, BottomSheet, Button, Card, EmptyState, Icon, SkeletonCard } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import { useToast } from '@/hooks/useToast';
 import { flashcardService } from '@/services';
@@ -31,6 +31,7 @@ export default function FlashcardsDashboardScreen() {
   const subject = subjects.find((item) => item.id === subjectId);
   const [decks, setDecks] = useState<FlashcardDeck[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, mastered: 0, learning: 0, pending: 0 });
+  const [isLoading, setIsLoading] = useState(true);
   const [deckToDelete, setDeckToDelete] = useState<FlashcardDeck | null>(null);
 
   const load = useCallback(async () => {
@@ -41,6 +42,7 @@ export default function FlashcardsDashboardScreen() {
     ]);
     setDecks(deckList);
     setStats(statsResult);
+    setIsLoading(false);
   }, [subjectId]);
 
   useFocusEffect(
@@ -93,7 +95,12 @@ export default function FlashcardsDashboardScreen() {
         <Button label="Crear mazo" variant="ghost" size="sm" icon="add" onPress={() => router.push(`/materia/${subjectId}/flashcards/crear`)} />
       </View>
 
-      {decks.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.deckList}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : decks.length === 0 ? (
         <EmptyState
           icon="albums-outline"
           title="Todavía no creaste ningún mazo"

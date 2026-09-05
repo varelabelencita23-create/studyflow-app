@@ -147,7 +147,7 @@ export default function CrearMazoScreen() {
                     <Pressable key={topic.id} onPress={() => toggleTopic(topic.id)} style={styles.topicRow}>
                       <Text style={styles.topicLabel} numberOfLines={1}>{topic.title}</Text>
                       <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                        {isSelected && <Icon name="checkmark" size={13} color="#FFFFFF" />}
+                        {isSelected && <Icon name="checkmark" size={13} color={colors.textPrimary} />}
                       </View>
                     </Pressable>
                   );

@@ -90,7 +90,7 @@ export default function SessionTimerScreen() {
           onPress={handleTogglePause}
           style={[styles.playButton, !activeSession.isRunning && styles.playButtonPaused]}
         >
-          <Icon name={activeSession.isRunning ? 'pause' : 'play'} size={32} color="#FFFFFF" />
+          <Icon name={activeSession.isRunning ? 'pause' : 'play'} size={32} color={colors.textPrimary} />
         </Pressable>
 
         <Button label="Finalizar sesión" size="lg" fullWidth onPress={() => router.replace('/sesion/resumen')} />
@@ -134,10 +134,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   timer: {
-    fontFamily: typography.largeTitle.fontFamily,
-    fontSize: 64,
+    ...typography.hero,
     color: colors.textPrimary,
-    letterSpacing: 1,
   },
   status: {
     ...typography.subheadline,

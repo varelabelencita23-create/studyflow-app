@@ -99,7 +99,7 @@ export default function NuevaSesionScreen() {
             <Pressable key={topic.id} onPress={() => toggleContent(topic.id)} style={styles.contentRow}>
               <Text style={styles.contentLabel} numberOfLines={1}>{topic.title}</Text>
               <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                {isSelected && <Icon name="checkmark" size={14} color="#FFFFFF" />}
+                {isSelected && <Icon name="checkmark" size={14} color={colors.textPrimary} />}
               </View>
             </Pressable>
           );

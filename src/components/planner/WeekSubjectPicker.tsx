@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -62,19 +62,19 @@ export function WeekSubjectPicker({
         {localSelected.length}/{maxSelectable} seleccionadas
       </Text>
 
-      <View style={styles.list}>
+      <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
         {subjects.map((subject) => {
           const isSelected = localSelected.includes(subject.id);
           return (
             <Pressable key={subject.id} onPress={() => toggle(subject.id)} style={styles.row}>
               <Text style={styles.rowLabel} numberOfLines={1}>{subject.name}</Text>
               <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                {isSelected && <Icon name="checkmark" size={14} color="#FFFFFF" />}
+                {isSelected && <Icon name="checkmark" size={14} color={colors.textPrimary} />}
               </View>
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       <Button
         label="Guardar"
@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: spacing.xs,
+    maxHeight: 320,
   },
   row: {
     flexDirection: 'row',

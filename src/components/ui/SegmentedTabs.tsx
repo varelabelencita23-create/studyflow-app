@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    padding: 2,
+    padding: spacing.xxs,
     position: 'relative',
   },
   segment: {
@@ -72,9 +72,9 @@ const styles = StyleSheet.create({
   },
   indicator: {
     position: 'absolute',
-    top: 2,
-    bottom: 2,
-    left: 2,
+    top: spacing.xxs,
+    bottom: spacing.xxs,
+    left: spacing.xxs,
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceHighlight,
     borderWidth: StyleSheet.hairlineWidth,

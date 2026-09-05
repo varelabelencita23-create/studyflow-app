@@ -1,13 +1,13 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { BottomSheet, Button, EmptyState, Icon, IconName, Input } from '@/components/ui';
+import { BottomSheet, Button, EmptyState, Icon, IconName, Input, SkeletonCard } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import { useToast } from '@/hooks/useToast';
 import { fileService } from '@/services';
 import { useAppState } from '@/store';
 import { colors, radius, spacing, typography } from '@/theme';
-import { FileKind, FileSource, FolderCategory, StudyMaterial } from '@/types';
+import { FileKind, FileSource, StudyMaterial } from '@/types';
 
 const FILE_KIND_ICON: Record<FileKind, IconName> = {
   pdf: 'document-outline',
@@ -40,14 +40,17 @@ export default function ArchivosCategoryScreen() {
   const folderDef = fileService.FOLDER_DEFS.find((def) => def.category === category);
 
   const [files, setFiles] = useState<StudyMaterial[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [addSheetVisible, setAddSheetVisible] = useState(false);
   const [selectedFile, setSelectedFile] = useState<StudyMaterial | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!subjectId || !folderDef) return;
-    fileService.listFiles(subjectId, folderDef.category).then(setFiles);
+    const fileList = await fileService.listFiles(subjectId, folderDef.category);
+    setFiles(fileList);
+    setIsLoading(false);
   }, [subjectId, folderDef]);
 
   useFocusEffect(
@@ -110,7 +113,12 @@ export default function ArchivosCategoryScreen() {
       <Text style={styles.title}>{folderDef.name}</Text>
       <Text style={styles.subtitle}>{subject.name}</Text>
 
-      {files.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.list}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : files.length === 0 ? (
         <EmptyState
           icon="folder-open-outline"
           title="Esta carpeta está vacía"

@@ -38,9 +38,8 @@ export default function ForgotPasswordScreen() {
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <View style={{ flex: 1 }} />
-        <Pressable hitSlop={12} onPress={() => router.back()} style={styles.closeButton}>
-          <Icon name="close" size={20} color={colors.textPrimary} />
+        <Pressable hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
+          <Icon name="chevron-back" size={22} color={colors.textPrimary} />
         </Pressable>
       </View>
 
@@ -87,17 +86,14 @@ export default function ForgotPasswordScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
     marginTop: spacing.sm,
     marginBottom: spacing.xl,
   },
-  closeButton: {
+  backButton: {
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
   },
   title: {
     ...typography.title1,

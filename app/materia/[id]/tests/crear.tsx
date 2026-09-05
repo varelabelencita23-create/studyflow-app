@@ -158,7 +158,7 @@ export default function CrearTestScreen() {
                     <Pressable key={topic.id} onPress={() => toggleTopic(topic.id)} style={styles.topicRow}>
                       <Text style={styles.topicLabel} numberOfLines={1}>{topic.title}</Text>
                       <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                        {isSelected && <Icon name="checkmark" size={13} color="#FFFFFF" />}
+                        {isSelected && <Icon name="checkmark" size={13} color={colors.textPrimary} />}
                       </View>
                     </Pressable>
                   );
@@ -188,7 +188,7 @@ export default function CrearTestScreen() {
               <View key={index} style={styles.optionRow}>
                 <Pressable hitSlop={8} onPress={() => setManualCorrectIndex(index)} style={styles.optionMark}>
                   <View style={[styles.optionRadio, manualCorrectIndex === index && styles.optionRadioSelected]}>
-                    {manualCorrectIndex === index && <Icon name="checkmark" size={12} color="#FFFFFF" />}
+                    {manualCorrectIndex === index && <Icon name="checkmark" size={12} color={colors.textPrimary} />}
                   </View>
                 </Pressable>
                 <Input

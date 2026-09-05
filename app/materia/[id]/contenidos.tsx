@@ -2,7 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Badge, BadgeVariant, BottomSheet, Button, EmptyState, Icon, Input } from '@/components/ui';
+import { Badge, BadgeVariant, BottomSheet, Button, EmptyState, Icon, Input, SkeletonCard } from '@/components/ui';
 import { ContentMetaSheet, ContentMetaValues } from '@/components/content';
 import { Screen } from '@/components/ui/Screen';
 import { useToast } from '@/hooks/useToast';
@@ -53,6 +53,8 @@ export default function ContenidosScreen() {
 
   const [metaTarget, setMetaTarget] = useState<MetaTarget | null>(null);
 
+  const [isLoading, setIsLoading] = useState(true);
+
   const load = useCallback(async () => {
     if (!subjectId) return;
     const [unitList, topicList, subtopicList] = await Promise.all([
@@ -63,6 +65,7 @@ export default function ContenidosScreen() {
     setUnits(unitList);
     setTopics(topicList);
     setSubtopics(subtopicList);
+    setIsLoading(false);
   }, [subjectId]);
 
   useFocusEffect(
@@ -187,7 +190,12 @@ export default function ContenidosScreen() {
       <Text style={styles.title}>Contenidos</Text>
       <Text style={styles.subtitle}>{subject?.name ?? 'Materia'}</Text>
 
-      {units.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.unitList}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : units.length === 0 ? (
         <EmptyState
           icon="list-outline"
           title="Todavía no agregaste contenidos"

@@ -2,7 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { BottomSheet, Card, Chip, EmptyState, Icon, ProgressBar } from '@/components/ui';
+import { BottomSheet, Card, Chip, EmptyState, Icon, ProgressBar, SkeletonCard } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import { contentPlanService, contentService, examService } from '@/services';
 import { useAppState } from '@/store';
@@ -20,6 +20,7 @@ export default function PlanScreen() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [assignments, setAssignments] = useState<ContentPlanAssignment[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [pickerTopic, setPickerTopic] = useState<Topic | null>(null);
 
   const load = useCallback(async () => {
@@ -32,6 +33,7 @@ export default function PlanScreen() {
     setTopics(topicList);
     setAssignments(assignmentList);
     setExams(examList);
+    setIsLoading(false);
   }, [subjectId]);
 
   useFocusEffect(
@@ -151,7 +153,12 @@ export default function PlanScreen() {
       </View>
 
       <Text style={styles.sectionTitle}>Contenido pendiente</Text>
-      {pendingTopics.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.pendingList}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : pendingTopics.length === 0 ? (
         <EmptyState
           icon="checkmark-done-outline"
           title="No tenés contenido pendiente"

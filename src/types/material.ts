@@ -1,4 +1,4 @@
-import { ID, ISODateString, Timestamped } from './common';
+import { ID, Timestamped } from './common';
 
 export type FileKind = 'pdf' | 'word' | 'image' | 'document' | 'other';
 

@@ -14,6 +14,8 @@ export const fontFamily = {
 type TypeStyle = Pick<TextStyle, 'fontFamily' | 'fontSize' | 'lineHeight' | 'letterSpacing'>;
 
 export const typography: Record<string, TypeStyle> = {
+  /** Bespoke oversized numeral for a single full-screen hero display (e.g. the study timer). */
+  hero: { fontFamily: fontFamily.bold, fontSize: 64, lineHeight: 72, letterSpacing: 1 },
   largeTitle: { fontFamily: fontFamily.bold, fontSize: 34, lineHeight: 41, letterSpacing: 0.37 },
   title1: { fontFamily: fontFamily.bold, fontSize: 28, lineHeight: 34, letterSpacing: 0.36 },
   title2: { fontFamily: fontFamily.semibold, fontSize: 22, lineHeight: 28, letterSpacing: 0.35 },

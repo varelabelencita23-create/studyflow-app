@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Badge, BottomSheet, EmptyState, Icon } from '@/components/ui';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Badge, BottomSheet, EmptyState, Icon, SkeletonCard } from '@/components/ui';
 import { ExamFormSheet } from '@/components/exams';
 import { Screen } from '@/components/ui/Screen';
 import { examService } from '@/services';
@@ -32,11 +32,14 @@ export default function ParcialesScreen() {
   const { subjects } = useAppState();
 
   const [exams, setExams] = useState<Exam[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [subjectPickerVisible, setSubjectPickerVisible] = useState(false);
   const [creatingForSubject, setCreatingForSubject] = useState<Subject | null>(null);
 
-  const load = useCallback(() => {
-    examService.listAll().then(setExams);
+  const load = useCallback(async () => {
+    const examList = await examService.listAll();
+    setExams(examList);
+    setIsLoading(false);
   }, []);
 
   useFocusEffect(
@@ -77,7 +80,12 @@ export default function ParcialesScreen() {
         </Pressable>
       </View>
 
-      {exams.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.list}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : exams.length === 0 ? (
         <EmptyState
           icon="document-text-outline"
           title="Sin parciales cargados"
@@ -113,14 +121,14 @@ export default function ParcialesScreen() {
 
       <BottomSheet visible={subjectPickerVisible} onClose={() => setSubjectPickerVisible(false)}>
         <Text style={styles.sheetTitle}>¿Para qué materia?</Text>
-        <View style={styles.subjectList}>
+        <ScrollView style={styles.subjectList} showsVerticalScrollIndicator={false}>
           {subjects.map((subject) => (
             <Pressable key={subject.id} onPress={() => handlePickSubject(subject)} style={styles.subjectRow}>
               <Text style={styles.subjectLabel}>{subject.name}</Text>
               <Icon name="chevron-forward" size={16} color={colors.textTertiary} />
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       </BottomSheet>
 
       <ExamFormSheet
@@ -253,6 +261,7 @@ const styles = StyleSheet.create({
   },
   subjectList: {
     gap: spacing.xs,
+    maxHeight: 320,
   },
   subjectRow: {
     flexDirection: 'row',

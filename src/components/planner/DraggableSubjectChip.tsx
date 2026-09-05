@@ -133,10 +133,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 5,
+    paddingHorizontal: spacing.xs,
   },
   countText: {
     ...typography.caption2,
-    color: '#FFFFFF',
+    color: colors.textPrimary,
   },
 });

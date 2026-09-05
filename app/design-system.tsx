@@ -15,8 +15,10 @@ import {
   ProgressBar,
   Screen,
   SegmentedTabs,
+  SelectableCard,
   Skeleton,
   SkeletonCard,
+  Switch,
 } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
 import { colors, radius, spacing, typography } from '@/theme';
@@ -41,6 +43,8 @@ export default function DesignSystemScreen() {
   const [segment, setSegment] = useState('week');
   const [sheetVisible, setSheetVisible] = useState(false);
   const [dialogVisible, setDialogVisible] = useState(false);
+  const [switchOn, setSwitchOn] = useState(true);
+  const [studyMode, setStudyMode] = useState<'standard' | 'deep'>('standard');
 
   return (
     <Screen scroll edges={['top', 'bottom']}>
@@ -147,6 +151,32 @@ export default function DesignSystemScreen() {
         />
       </Section>
 
+      <Section title="Switch">
+        <View style={styles.switchRow}>
+          <Text style={styles.dsText}>Recordatorio diario</Text>
+          <Switch value={switchOn} onValueChange={setSwitchOn} />
+        </View>
+      </Section>
+
+      <Section title="Selectable Card">
+        <View style={styles.stackGap}>
+          <SelectableCard
+            title="Estándar"
+            description="Enfocate en 3 materias por semana."
+            icon="flash-outline"
+            selected={studyMode === 'standard'}
+            onPress={() => setStudyMode('standard')}
+          />
+          <SelectableCard
+            title="Profundo"
+            description="Concentrate en 2 materias por semana."
+            icon="layers-outline"
+            selected={studyMode === 'deep'}
+            onPress={() => setStudyMode('deep')}
+          />
+        </View>
+      </Section>
+
       <Section title="Empty state">
         <EmptyState
           icon="sparkles-outline"
@@ -244,6 +274,11 @@ const styles = StyleSheet.create({
   },
   stackGap: {
     gap: spacing.md,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   row: {
     flexDirection: 'row',

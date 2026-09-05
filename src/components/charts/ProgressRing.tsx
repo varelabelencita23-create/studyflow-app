@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { colors, typography } from '@/theme';
+import { colors, spacing, typography } from '@/theme';
 
 interface ProgressRingProps {
   progress: number; // 0-1
@@ -68,6 +68,6 @@ const styles = StyleSheet.create({
   label: {
     ...typography.footnote,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
 });

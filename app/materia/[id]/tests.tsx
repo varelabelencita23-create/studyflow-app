@@ -1,7 +1,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Badge, BottomSheet, Button, Card, EmptyState, Icon } from '@/components/ui';
+import { Badge, BottomSheet, Button, Card, EmptyState, Icon, SkeletonCard } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import { useToast } from '@/hooks/useToast';
 import { quizService } from '@/services';
@@ -28,6 +28,7 @@ export default function TestsDashboardScreen() {
 
   const subject = subjects.find((item) => item.id === subjectId);
   const [rows, setRows] = useState<QuizRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [quizToDelete, setQuizToDelete] = useState<Quiz | null>(null);
 
   const load = useCallback(async () => {
@@ -40,6 +41,7 @@ export default function TestsDashboardScreen() {
       }),
     );
     setRows(withAttempts);
+    setIsLoading(false);
   }, [subjectId]);
 
   useFocusEffect(
@@ -85,7 +87,12 @@ export default function TestsDashboardScreen() {
         <Button label="Crear test" variant="ghost" size="sm" icon="add" onPress={() => router.push(`/materia/${subjectId}/tests/crear`)} />
       </View>
 
-      {rows.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.quizList}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : rows.length === 0 ? (
         <EmptyState
           icon="checkbox-outline"
           title="Todavía no creaste ningún test"

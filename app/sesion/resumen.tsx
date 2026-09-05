@@ -118,7 +118,7 @@ export default function SessionSummaryScreen() {
               <Pressable key={item.id} onPress={() => toggle(item.id)} style={styles.row}>
                 <Text style={styles.rowLabel} numberOfLines={1}>{item.title}</Text>
                 <View style={[styles.checkbox, isChecked && styles.checkboxSelected]}>
-                  {isChecked && <Icon name="checkmark" size={14} color="#FFFFFF" />}
+                  {isChecked && <Icon name="checkmark" size={14} color={colors.textPrimary} />}
                 </View>
               </Pressable>
             );

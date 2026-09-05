@@ -1,5 +1,43 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapa completada: 17 — Pulido final
+
+Pedido del usuario: "necesito que toda la app tenga el mismo estilo iOS hermoso y divino que no haya bugs ni nada". Con las 16 etapas anteriores ya construidas, esta etapa no agrega features nuevas — es una auditoría completa de toda la app (visual, bugs, código muerto, consistencia) seguida de las correcciones. Se usó un agente de exploración de solo lectura para auditar todo `app/` y `src/` contra 7 categorías (inconsistencias visuales, patrones de bug conocidos, completitud del design system, copy pendiente, registro de rutas, estados de carga, haptics), y después se corrigió cada hallazgo real uno por uno.
+
+### Hallazgos y correcciones
+
+**Bugs reales (2)**: dos `BottomSheet` con listas de materias sin límite (`app/(tabs)/parciales.tsx` y `src/components/planner/WeekSubjectPicker.tsx`) no estaban envueltas en un `ScrollView` con `maxHeight`, a diferencia del mismo patrón ya usado en `parcial/[examId].tsx` — con muchas materias cargadas, la lista se cortaba sin poder scrollear hasta el final. Corregido replicando el patrón existente.
+
+**Código muerto**: una rama `else` inalcanzable en `app/materia/[id].tsx` (todos los accesos de la grilla ya estaban manejados por el `if/else if` anterior) que además contenía el único texto placeholder que quedaba en toda la app ("Disponible en una próxima etapa") — eliminada. Más 9 imports sin uso detectados con `tsc --noEmit --noUnusedLocals --noUnusedParameters` en `study-mode.tsx`, `perfil.tsx`, `materia/[id].tsx`, `archivos/[category].tsx`, `perfil/modalidad.tsx`, `sesion/[sessionId].tsx`, `BarChart.tsx`, `SegmentedTabs.tsx` (este último se corrigió usando `spacing.xxs` en vez de eliminar el import, ya que el valor faltante era exactamente el que el import serviría) y `types/material.ts`.
+
+**Colores/spacing/tipografía hardcodeados en vez de tokens**: 11 sitios con `'#FFFFFF'` literal en vez de `colors.textPrimary` (sesiones, parcial, drive, crear test/mazo, `DraggableSubjectChip`, `Button`); 2 `rgba()` sueltos que ahora son tokens nuevos (`colors.tabBarFallback` para el fondo del tab bar en Android/web, `colors.onLightOverlaySubtle` para el botón "quitar" sobre la tarjeta clara del planificador); varios `padding`/`margin` numéricos sueltos reemplazados por `spacing.xxs/sm/md/lg` en `(tabs)/_layout.tsx`, `Skeleton.tsx`, `WeekDayRow.tsx`, `DraggableSubjectChip.tsx`, `SegmentedTabs.tsx`, `ProgressRing.tsx`; el dígito gigante del timer (`fontSize: 64` suelto) ahora es un token nuevo `typography.hero`, documentado como la única cifra bespoke de la app.
+
+**Inconsistencia de UX real**: `forgot-password.tsx` usaba un ícono "cerrar" (X) a la derecha para volver, mientras que `auth.tsx` — la pantalla inmediatamente anterior en el mismo flujo — usa una flecha "atrás" a la izquierda. Se unificó a la flecha atrás, el patrón usado en el resto de la app.
+
+**Design system incompleto**: `Switch` y `SelectableCard` (este último ya usado en modalidad de estudio) no se mostraban en `/design-system`, el catálogo visual de todos los componentes reutilizables. Se agregaron sus secciones.
+
+**Estados de carga inconsistentes**: 8 pantallas con `useFocusEffect` mostraban su `EmptyState` ("todavía no creaste nada") inmediatamente al montar, antes de que la carga real resolviera — un destello engañoso en dispositivos lentos. Se agregó una bandera `isLoading` (default `true`, se apaga al final de `load()`) y un par de `SkeletonCard` mientras carga, en `tests.tsx`, `flashcards.tsx`, `(tabs)/parciales.tsx`, `materia/[id]/parciales.tsx`, `archivos/[category].tsx`, `plan.tsx`, `contenidos.tsx` y `(tabs)/estadisticas.tsx`. Se revisó también `materia/[id].tsx`: no se le agregó skeleton a propósito, porque ya usa placeholders "—" en sus stat tiles en vez de un `EmptyState` engañoso, así que no tenía el mismo problema.
+
+**Haptics inconsistentes**: `Card` (con `onPress`, usada en casi toda navegación) y `SelectableCard` (selección de modalidad de estudio) tenían animación de escala al tocar pero ningún feedback háptico, a diferencia de `Button`/`Chip`/`SegmentedTabs`/`Switch`. Se agregó `Haptics.impactAsync(Light)` a `Card` (mismo que `Button`, porque funciona como tile de navegación) y `Haptics.selectionAsync()` a `SelectableCard` (mismo que `Chip`, porque es semánticamente una selección).
+
+**Revisado y sin cambios**: registro de rutas en `app/_layout.tsx` (las 20 rutas no agrupadas tienen su `Stack.Screen`, sin registros huérfanos); patrón de carrera de estado de la Etapa 13 (`setState` parcial seguido de un `await`) — no se reintrodujo en ninguna pantalla nueva desde entonces; divisiones por cero y `.find()` sin chequear — todos ya estaban guardados. La duplicación de un `HeaderBar` local casi idéntico en 19 pantallas se identificó pero se dejó como está: es duplicación de código, no un bug visible, y extraerlo a un componente compartido a esta altura del proyecto tenía más riesgo (tocar 19 archivos) que beneficio real para el usuario.
+
+### Archivos tocados
+
+36 archivos, todos ya existentes — ninguna pantalla ni ruta nueva en esta etapa. `git diff --stat`: 187 líneas agregadas, 80 eliminadas, repartidas en cambios quirúrgicos y acotados (imports, un token nuevo, una línea de estado, un bloque de skeleton) — nunca una reescritura completa de un archivo.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` (incluido con `--noUnusedLocals --noUnusedParameters` para confirmar la lista de imports muertos) → sin errores, verificado después de cada tanda de cambios (bugs reales, limpieza, colores, tokens, design system, haptics, loading states).
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso en 3 checkpoints intermedios y en la verificación final.
+- `git diff --stat` y revisión línea por línea de los 36 archivos tocados, confirmando que cada cambio se pudiera trazar a un hallazgo concreto del audit.
+
+### Siguiente etapa
+
+Con esto se completan las 17 etapas del spec original. Como posibles pasos futuros (fuera del spec): conectar Supabase real reemplazando `src/services` sin tocar la UI, pickers reales de cámara/galería/documentos, integración real de generación de preguntas/tarjetas con IA, y — si en algún momento se justifica el riesgo — extraer el `HeaderBar` duplicado a un componente compartido.
+
+---
+
 ## Etapas completadas: 15 — Perfil y configuración, 16 — Insights
 
 A pedido del usuario ("vale ahora 15 y 16"), se hicieron juntas. Con las 17 etapas del spec original, esta deja pendiente solo la 17 (Pulido final). Mismo criterio de siempre: verificación (`tsc` + `expo export` Android/iOS) después de cada etapa individual, y `git diff` de cada archivo ya existente tocado para confirmar que los cambios fueran aditivos.

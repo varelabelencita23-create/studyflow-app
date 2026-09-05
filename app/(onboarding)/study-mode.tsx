@@ -7,7 +7,7 @@ import { Screen } from '@/components/ui/Screen';
 import { SelectableCard } from '@/components/ui/SelectableCard';
 import { StudyMode } from '@/types';
 import { useAppState } from '@/store';
-import { colors, radius, spacing, typography } from '@/theme';
+import { colors, spacing, typography } from '@/theme';
 
 const MODE_INFO: Record<StudyMode, { title: string; description: string; icon: 'flash-outline' | 'layers-outline' | 'options-outline'; subjectCount: number | null }> = {
   standard: {

@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 2,
     borderColor: 'transparent',
-    padding: 2,
+    padding: spacing.xxs,
   },
   emptyZone: {
     flexDirection: 'row',
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(10,10,12,0.06)',
+    backgroundColor: colors.onLightOverlaySubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },

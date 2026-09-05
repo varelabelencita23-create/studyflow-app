@@ -230,7 +230,7 @@ export default function ExamDetailScreen() {
                 <Pressable key={topic.id} onPress={() => toggleTopic(topic.id)} style={styles.pickerRow}>
                   <Text style={styles.pickerLabel} numberOfLines={1}>{topic.title}</Text>
                   <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                    {isSelected && <Icon name="checkmark" size={13} color="#FFFFFF" />}
+                    {isSelected && <Icon name="checkmark" size={13} color={colors.textPrimary} />}
                   </View>
                 </Pressable>
               );

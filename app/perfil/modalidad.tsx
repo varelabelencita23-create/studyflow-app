@@ -5,7 +5,7 @@ import { Button, Icon, SelectableCard } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import { useToast } from '@/hooks/useToast';
 import { useAppState } from '@/store';
-import { colors, radius, spacing, typography } from '@/theme';
+import { colors, spacing, typography } from '@/theme';
 import { StudyMode } from '@/types';
 
 const MODE_INFO: Record<StudyMode, { title: string; description: string; icon: 'flash-outline' | 'layers-outline' | 'options-outline'; subjectCount: number | null }> = {

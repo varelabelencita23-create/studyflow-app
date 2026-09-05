@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -21,7 +22,10 @@ export function SelectableCard({ title, description, icon, selected, onPress, ch
 
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={() => {
+        Haptics.selectionAsync();
+        onPress();
+      }}
       onPressIn={() => {
         scale.value = withTiming(0.98, { duration: 100 });
       }}

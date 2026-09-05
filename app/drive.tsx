@@ -130,7 +130,7 @@ export default function DriveScreen() {
                   </View>
                   <Text style={styles.rowLabel} numberOfLines={1}>{file.name}</Text>
                   <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                    {isSelected && <Icon name="checkmark" size={13} color="#FFFFFF" />}
+                    {isSelected && <Icon name="checkmark" size={13} color={colors.textPrimary} />}
                   </View>
                 </Pressable>
               );

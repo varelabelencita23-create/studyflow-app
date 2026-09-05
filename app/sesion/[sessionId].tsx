@@ -5,7 +5,7 @@ import { Card, Icon } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import { contentService, sessionService } from '@/services';
 import { useAppState } from '@/store';
-import { colors, radius, spacing, typography } from '@/theme';
+import { colors, spacing, typography } from '@/theme';
 import { StudySession } from '@/types';
 import { formatDuration, formatShortDate } from '@/utils';
 

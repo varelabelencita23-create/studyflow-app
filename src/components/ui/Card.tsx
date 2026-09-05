@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { ReactNode } from 'react';
 import { Pressable, StyleSheet, ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -25,7 +26,10 @@ export function Card({ children, onPress, variant = 'surface', padding = spacing
 
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
       onPressIn={() => {
         scale.value = withTiming(0.98, { duration: 100 });
       }}
