@@ -4,10 +4,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { BottomSheet, Card, Chip, EmptyState, Icon, ProgressBar } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
-import { contentPlanService, contentService } from '@/services';
+import { contentPlanService, contentService, examService } from '@/services';
 import { useAppState } from '@/store';
 import { colors, radius, spacing, typography } from '@/theme';
-import { ContentPlanAssignment, Topic, WeekDay } from '@/types';
+import { ContentPlanAssignment, Exam, Topic, WeekDay } from '@/types';
 import { WEEK_DAYS } from '@/utils';
 
 export default function PlanScreen() {
@@ -19,16 +19,19 @@ export default function PlanScreen() {
 
   const [topics, setTopics] = useState<Topic[]>([]);
   const [assignments, setAssignments] = useState<ContentPlanAssignment[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
   const [pickerTopic, setPickerTopic] = useState<Topic | null>(null);
 
   const load = useCallback(async () => {
     if (!subjectId) return;
-    const [topicList, assignmentList] = await Promise.all([
+    const [topicList, assignmentList, examList] = await Promise.all([
       contentService.listBySubject(subjectId),
       contentPlanService.listBySubject(subjectId),
+      examService.listBySubject(subjectId),
     ]);
     setTopics(topicList);
     setAssignments(assignmentList);
+    setExams(examList);
   }, [subjectId]);
 
   useFocusEffect(
@@ -48,6 +51,15 @@ export default function PlanScreen() {
     () => new Map(assignments.map((assignment) => [assignment.contentId, assignment.day])),
     [assignments],
   );
+
+  const nextExamLabel = useMemo(() => {
+    const DAY_MS = 1000 * 60 * 60 * 24;
+    const next = exams
+      .map((exam) => Math.ceil((new Date(exam.date).getTime() - Date.now()) / DAY_MS))
+      .filter((daysRemaining) => daysRemaining >= 0)
+      .sort((a, b) => a - b)[0];
+    return next !== undefined ? `${next} días` : '—';
+  }, [exams]);
 
   const pendingTopics = useMemo(() => topics.filter((topic) => topic.status !== 'completed'), [topics]);
   const plannedTopics = pendingTopics.filter((topic) => assignmentByContentId.has(topic.id));
@@ -90,7 +102,7 @@ export default function PlanScreen() {
 
       <View style={styles.metaRow}>
         <Card variant="surface" style={styles.metaCard}>
-          <Text style={styles.metaValue}>—</Text>
+          <Text style={styles.metaValue}>{nextExamLabel}</Text>
           <Text style={styles.metaLabel}>Próximo parcial</Text>
         </Card>
         <Card variant="surface" style={styles.metaCard}>

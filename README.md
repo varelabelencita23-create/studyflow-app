@@ -2,7 +2,7 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 9 — Google Drive (mock)** completada (incluye Etapa 7 — Planificación por materia y Etapa 8 — Archivos). Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **Etapa 13 — Parciales (calendario global + ritmo)** completada (incluye Etapa 10 — Banco de parciales y Etapa 11 — Flashcards; Etapa 12 — Tests queda pendiente). Frontend-only, sin backend todavía (mocks persistidos localmente).
 
 ## Stack
 
@@ -63,6 +63,14 @@ app/                        # Rutas (Expo Router)
       archivos.tsx                 # Biblioteca de archivos: lista de carpetas (5 categorías fijas)
       archivos/
         [category].tsx              # Archivos dentro de una carpeta: agregar/renombrar/eliminar
+      parciales.tsx                # Banco de parciales de la materia, organizado por año
+      flashcards.tsx                # Dashboard de flashcards (total/dominadas/en progreso/pendientes)
+      flashcards/
+        crear.tsx                    # Crear mazo: generar (mock) o manual
+        [deckId]/
+          estudiar.tsx                 # Modo estudio: pregunta → respuesta → no la sabía/la sabía/la dominé
+  parcial/
+    [examId].tsx                # Visor de parcial: countdown, % preparado, ritmo, contenidos, archivo
   sesion/
     nueva.tsx                   # Setup: elegir contenidos a estudiar + objetivo
     timer.tsx                    # Timer con pausar/reanudar/finalizar
@@ -72,8 +80,8 @@ app/                        # Rutas (Expo Router)
 
 src/
   theme/          # Colores, tipografía, spacing, radios, sombras (design tokens)
-  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ + content/
-  services/       # Capa mock (auth, materias, contenidos, sesiones, plan de contenidos, archivos, Drive, onboarding, plan semanal, storage)
+  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ + content/ + exams/
+  services/       # Capa mock (auth, materias, contenidos, sesiones, plan de contenidos, archivos, Drive, parciales, flashcards, onboarding, plan semanal, storage)
   store/          # AppStateProvider (estado global) + ActiveSessionProvider (timer en curso)
   hooks/          # Hooks compartidos (ej. useToast)
   types/          # Entidades de dominio (preparadas para Supabase)
@@ -132,10 +140,10 @@ El tab **Inicio** es el planificador semanal real (no un calendario de horarios)
 
 La tab **Materias** tiene CRUD completo (agregar/editar/eliminar/reordenar) igual que en el onboarding — ambas pantallas comparten el bottom sheet `SubjectFormSheet`. Tocar una materia entra a su **Home** (`/materia/[id]`), que se siente como el "universo" de esa materia:
 
-- Progreso general, próximo parcial (placeholder honesto hasta la Etapa 13 — no se inventan datos), días asignados esta semana, horas estudiadas, temas completados, cantidad de sesiones y promedio diario — todo calculado a partir de datos reales (contenidos y sesiones), no hardcodeado.
+- Progreso general, próximo parcial (real desde la Etapa 13 — countdown al parcial más cercano de esa materia, o "—" si todavía no cargaste ninguno), días asignados esta semana, horas estudiadas, temas completados, cantidad de sesiones y promedio diario — todo calculado a partir de datos reales (contenidos, sesiones y parciales), no hardcodeado.
 - Botón **Iniciar sesión** (con guardia: si ya hay una sesión en curso en otra materia, te lleva a esa antes de perderla).
 - Últimas 3 sesiones, con acceso al detalle de cada una.
-- Grilla de accesos: **Contenidos**, **Plan de estudio** y **Archivos** ya son reales; Parciales, Flashcards y Tests quedan como vista previa hasta sus propias etapas.
+- Grilla de accesos: **Contenidos**, **Plan de estudio**, **Archivos**, **Parciales** y **Flashcards** ya son reales; Tests queda como vista previa hasta su propia etapa.
 
 ## Contenidos (Unidad → Tema → Subtema)
 
@@ -151,7 +159,7 @@ Las materias creadas en la Etapa 5 (contenidos planos, sin unidades) se migran a
 
 ## Planificación por materia
 
-`/materia/[id]/plan` toma el contenido pendiente (temas no completados) y deja asignarlo a un día específico dentro de los días que esa materia ya tiene en el planificador semanal (o los 7 días si todavía no le asignaste ninguno). Muestra progreso general, cuánto te falta planificar y — igual que en el Home de materia — un placeholder honesto para "próximo parcial" hasta la Etapa 13. Un contenido solo puede estar asignado a un día a la vez; se persiste con `contentPlanService`.
+`/materia/[id]/plan` toma el contenido pendiente (temas no completados) y deja asignarlo a un día específico dentro de los días que esa materia ya tiene en el planificador semanal (o los 7 días si todavía no le asignaste ninguno). Muestra progreso general, cuánto te falta planificar y el countdown real al próximo parcial de esa materia. Un contenido solo puede estar asignado a un día a la vez; se persiste con `contentPlanService`.
 
 ## Archivos
 
@@ -162,6 +170,18 @@ Como pide esta etapa, todavía no hay subida real: Dispositivo/Cámara/Galería 
 ## Google Drive (mock)
 
 Desde "Agregar archivo", la opción **Google Drive** abre `/drive`: un conector mock con su propio estado de "no conectado" (botón Conectar) y, una vez conectado, un explorador de carpetas/archivos ficticios con selección múltiple e "Importar (n)". `driveService.ts` dejá documentado en comentarios el punto exacto de integración real (OAuth vía `expo-auth-session`, Drive API `files.list`/`files.get` en vez de los datos mock).
+
+## Parciales (banco por materia, calendario global y ritmo)
+
+- **Banco por materia** (`/materia/[id]/parciales`): parciales organizados por año, con tipo (Parcial/Recuperatorio/Final/Trabajo práctico) y fecha (elegida con un stepper "Faltan N días" en vez de un date-picker completo, para no sumar una librería nueva solo para esto).
+- **Calendario global** (tab **Parciales**, antes un placeholder de la Etapa 1): todos los parciales de todas las materias, separados en Próximos/Pasados. Crear uno desde acá primero pide elegir la materia.
+- **Visor de parcial** (`/parcial/[examId]`, compartido por el banco y el calendario global): countdown, un estado — **Vas bien / Estás atrasada / Vas adelantada** — según se compare tu ritmo real de estudio (minutos/día, calculado de tus sesiones de los últimos 7 días) contra el ritmo que necesitarías para llegar al 100%. El % preparado sale del progreso real de los contenidos que vincules al parcial (o del progreso general de la materia si todavía no vinculaste ninguno). También podés adjuntar un archivo (usa la misma carpeta "Parciales" de Archivos) y editar/eliminar el parcial.
+
+> El ritmo necesario usa una estimación fija (600 minutos para pasar de 0% a 100% de preparación) porque no hay ninguna señal real de la que derivarlo en un mock — está documentado como tal en `examService.ts`. El resto del cálculo (ritmo actual, % preparado, countdown) sí sale de datos reales de la app.
+
+## Flashcards
+
+Desde el Home de materia, **Flashcards** (`/materia/[id]/flashcards`) muestra el dashboard con total/dominadas/en progreso/pendientes y la lista de mazos. **Crear mazo** ofrece dos modos con un segmented control: **Generar** (elegís contenidos + cantidad y arma preguntas del tipo "¿Qué podés explicar sobre X?" — un mock claramente marcado en `flashcardService.generateMockCards`, con un comentario de dónde iría una llamada real a un modelo de IA) o **Manual** (cargás pregunta/respuesta vos misma). El **modo estudio** (`/materia/[id]/flashcards/[deckId]/estudiar`) es pregunta → "Mostrar respuesta" → **No la sabía / La sabía / La dominé**, con un resumen al terminar el mazo.
 
 ## Sesiones de estudio
 
@@ -182,10 +202,10 @@ Desde el Home de una materia, **Iniciar sesión** abre `/sesion/nueva`: elegís 
 7. ~~Planificación por materia~~ ✅
 8. ~~Archivos (biblioteca estilo Finder)~~ ✅
 9. ~~Integración de Google Drive (mock)~~ ✅
-10. Banco de parciales
-11. Flashcards
+10. ~~Banco de parciales~~ ✅
+11. ~~Flashcards~~ ✅
 12. Tests
-13. Calendario global de parciales
+13. ~~Calendario global de parciales~~ ✅
 14. Estadísticas
 15. Perfil y configuración
 16. Insights

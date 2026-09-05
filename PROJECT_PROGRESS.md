@@ -1,5 +1,55 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapas completadas: 10 — Banco de parciales, 11 — Flashcards, 13 — Parciales (calendario global + ritmo)
+
+A pedido explícito del usuario, se salteó la Etapa 12 (Tests) y se hicieron estas tres juntas, con el mismo cuidado de la vez anterior: verificación (`tsc` + `expo export` Android/iOS) después de cada etapa, y revisión de `git diff` de todo archivo ya existente que se tocara para confirmar que fuera aditivo. La Etapa 10 y la Etapa 13 comparten el mismo modelo de datos (`Exam`), así que se construyeron coordinadas para no dejarlas inconsistentes entre sí.
+
+### Funcionalidades implementadas
+
+**Etapa 10 — Banco de parciales** (`/materia/[id]/parciales`)
+- Parciales organizados por año (más reciente primero), cada uno con tipo (Parcial/Recuperatorio/Final/Trabajo práctico) y fecha.
+- La fecha se elige con un stepper "Faltan N días" (`ExamFormSheet`, compartido con la Etapa 13) en vez de instalar una librería de date-picker solo para esto — mismo criterio ya usado en la Etapa 6 para "fecha objetivo" de contenidos.
+- "Agregar parcial" permite adjuntar un archivo reusando la infraestructura de Archivos (Etapa 8): el archivo se guarda en la carpeta "Parciales" existente de esa materia.
+
+**Etapa 13 — Parciales (calendario global + ritmo)**
+- La tab **Parciales** (placeholder desde la Etapa 1) ahora es el calendario global: todos los parciales de todas las materias, separados en Próximos/Pasados. Crear uno desde acá pide elegir la materia primero.
+- **Visor de parcial** (`/parcial/[examId]`, compartido por el banco por materia y el calendario global): countdown, badge de estado (**Vas bien / Estás atrasada / Vas adelantada**), % preparado, contenidos vinculados (opcional, multi-select de los temas de la materia) y archivo adjunto.
+- `examService.getReadiness`: el % preparado sale del progreso real de los contenidos vinculados (o del progreso general de la materia si no se vinculó ninguno); el ritmo actual sale de minutos reales estudiados en los últimos 7 días (`sessionService`); el ritmo necesario usa una estimación fija documentada (600 minutos para ir de 0% a 100%, ya que no hay ninguna señal real de la que derivarlo en un mock). El estado (ahead/on-track/behind) compara ambos ritmos.
+- Como beneficio directo de esta etapa, se actualizó el stat "Próximo parcial" del Home de materia y de la pantalla de Plan (que hasta ahora mostraban un placeholder fijo "—") para mostrar el countdown real al parcial más próximo de esa materia.
+
+**Etapa 11 — Flashcards** (`/materia/[id]/flashcards`)
+- Dashboard con total/dominadas/en progreso/pendientes (agregado de todos los mazos de la materia) y lista de mazos.
+- Crear mazo con un segmented control **Generar** (elegís contenidos + cantidad; `flashcardService.generateMockCards` arma preguntas del tipo "¿Qué podés explicar sobre X?" — mock explícitamente documentado, con el comentario de dónde iría una llamada real a un modelo de IA) o **Manual** (cargás pregunta/respuesta vos misma, tarjeta por tarjeta).
+- Modo estudio: pregunta → "Mostrar respuesta" → **No la sabía / La sabía / La dominé**, con resumen al terminar el mazo.
+
+### Archivos importantes creados
+
+- `src/services/examService.ts`, `src/services/flashcardService.ts`.
+- `src/components/exams/ExamFormSheet.tsx`.
+- `app/materia/[id]/parciales.tsx`, `app/parcial/[examId].tsx`.
+- `app/materia/[id]/flashcards.tsx`, `app/materia/[id]/flashcards/crear.tsx`, `app/materia/[id]/flashcards/[deckId]/estudiar.tsx`.
+- Modificados (aditivos, ver `git diff` en la verificación): `src/services/storage.ts` (+3 claves), `src/services/index.ts` (+2 exports), `src/services/fileService.ts` (+`getById`), `app/materia/[id].tsx` (wire de accesos 'parciales'/'flashcards' + stat real de "próximo parcial"), `app/materia/[id]/plan.tsx` (mismo stat real), `app/_layout.tsx` (registro de rutas nuevas). Reescrito por completo (deliberado, no accidental): `app/(tabs)/parciales.tsx`, el placeholder de la Etapa 1.
+
+### Problemas encontrados y solucionados
+
+1. **Bug real de carrera de estado en el visor de parcial**: `load()` llamaba `setExam(found)` y recién después calculaba `readiness` con un `await` en el medio — dejando una ventana de render donde `exam` ya estaba seteado pero `readiness` todavía era `null`, y el JSX usaba `readiness!.daysRemaining` confiando en que nunca sería null. Eso podía crashear con "Cannot read property 'daysRemaining' of null" en ese instante. Solución: se reordenó `load()` para juntar toda la data (`readiness`, `topics`, `material`) antes de llamar a cualquier `setState`, así `exam` y `readiness` se vuelven no-nulos juntos, en el mismo batch de renders.
+2. **Mismo patrón de riesgo revisado preventivamente** en el resto de pantallas nuevas (banco de parciales, dashboard de flashcards, modo estudio) — ninguna otra tenía una aserción de no-nulo (`!`) apoyada en dos `setState` separados por un `await`, así que no hacía falta el mismo fix ahí.
+3. **Lista larga sin scroll dentro de un bottom sheet**: el selector de contenidos para vincular a un parcial usaba una `View` con `maxHeight` fijo, que en una materia con muchos temas cortaría la lista sin poder scrollear (el `BottomSheet` de la librería no envuelve su contenido en un `ScrollView`). Se corrigió envolviendo esa lista puntual en un `ScrollView`.
+4. **Acceso a `docs.expo.dev` sigue bloqueado** por el proxy de red del entorno (mismo problema de siempre) — no fue necesario para este trabajo.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` → sin errores, verificado después de cada una de las 3 etapas y otra vez después de los dos fixes de bugs.
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso en cada checkpoint.
+- `git diff --stat` y revisión línea por línea de cada archivo ya existente tocado, confirmando que los cambios fueran aditivos (salvo la reescritura deliberada del placeholder de la tab Parciales).
+- Revisión manual: crear un parcial en el banco por materia y verificar que aparece en el calendario global; vincular contenidos a un parcial y confirmar que cambia el % preparado; generar un mazo mock y hacer un repaso completo verificando que las tres reacciones (no la sabía/la sabía/la dominé) actualizan las estadísticas del dashboard.
+
+### Siguiente etapa
+
+**Etapa 12 — Tests** (pendiente, salteada a pedido del usuario): dashboard de tests, crear test (seleccionar contenidos, cantidad, dificultad, preguntas manuales o mock), realizar test, resultado, repasar errores, historial.
+
+---
+
 ## Etapas completadas: 7 — Planificación por materia, 8 — Archivos, 9 — Google Drive (mock)
 
 Se hicieron juntas a pedido del usuario ("con cuidado de que esté todo bien y sin romper nada"). Por eso, además del trabajo de cada etapa, se verificó `tsc` + `expo export` (Android e iOS) **después de cada etapa individual**, no solo al final, y todos los cambios a archivos ya existentes se revisaron con `git diff` para confirmar que fueran puramente aditivos (solo 4 archivos existentes tocados, +12 líneas en total, 0 líneas eliminadas — el resto son archivos nuevos).

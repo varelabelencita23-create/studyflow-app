@@ -4,10 +4,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Icon, IconName, ProgressBar } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import { useToast } from '@/hooks/useToast';
-import { contentService, sessionService } from '@/services';
+import { contentService, examService, sessionService } from '@/services';
 import { useActiveSession, useAppState } from '@/store';
 import { colors, radius, spacing, typography } from '@/theme';
-import { StudySession, Topic } from '@/types';
+import { Exam, StudySession, Topic } from '@/types';
 import { formatDuration, formatShortDate, WEEK_DAYS } from '@/utils';
 
 const ACCESS_ITEMS: { label: string; icon: IconName; key: string }[] = [
@@ -30,15 +30,18 @@ export default function SubjectDetailScreen() {
 
   const [contents, setContents] = useState<Topic[]>([]);
   const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [contentList, sessionList] = await Promise.all([
+    const [contentList, sessionList, examList] = await Promise.all([
       contentService.listBySubject(id),
       sessionService.listBySubject(id),
+      examService.listBySubject(id),
     ]);
     setContents(contentList);
     setSessions(sessionList);
+    setExams(examList);
   }, [id]);
 
   useFocusEffect(
@@ -58,13 +61,21 @@ export default function SubjectDetailScreen() {
     const completedContents = contents.filter((topic) => topic.status === 'completed').length;
     const distinctDays = new Set(sessions.map((session) => session.date.slice(0, 10))).size;
     const averageMinutes = distinctDays > 0 ? Math.round(totalSeconds / 60 / distinctDays) : 0;
+
+    const DAY_MS = 1000 * 60 * 60 * 24;
+    const nextExam = exams
+      .map((exam) => ({ exam, daysRemaining: Math.ceil((new Date(exam.date).getTime() - Date.now()) / DAY_MS) }))
+      .filter((item) => item.daysRemaining >= 0)
+      .sort((a, b) => a.daysRemaining - b.daysRemaining)[0];
+
     return {
       hoursStudiedLabel: totalSeconds > 0 ? formatDuration(totalSeconds) : '—',
       contentsLabel: contents.length > 0 ? `${completedContents}/${contents.length}` : '—',
       sessionsCount: sessions.length,
       averageDailyLabel: averageMinutes > 0 ? `${averageMinutes} min` : '—',
+      nextExam,
     };
-  }, [sessions, contents]);
+  }, [sessions, contents, exams]);
 
   if (!subject) {
     return (
@@ -98,7 +109,11 @@ export default function SubjectDetailScreen() {
       <ProgressBar progress={subject.progress} showLabel label="Progreso general" style={styles.progress} />
 
       <View style={styles.statsGrid}>
-        <StatTile label="Próximo parcial" value="—" hint="Agregá uno en Parciales" />
+        <StatTile
+          label="Próximo parcial"
+          value={stats.nextExam ? `${stats.nextExam.daysRemaining} días` : '—'}
+          hint={stats.nextExam ? stats.nextExam.exam.title : 'Agregá uno en Parciales'}
+        />
         <StatTile label="Días esta semana" value={`${assignedDays.length}`} hint={assignedDayLabels || undefined} />
         <StatTile label="Horas estudiadas" value={stats.hoursStudiedLabel} />
         <StatTile label="Temas completados" value={stats.contentsLabel} />
@@ -150,6 +165,8 @@ export default function SubjectDetailScreen() {
               if (item.key === 'contenidos') router.push(`/materia/${subject.id}/contenidos`);
               else if (item.key === 'plan') router.push(`/materia/${subject.id}/plan`);
               else if (item.key === 'archivos') router.push(`/materia/${subject.id}/archivos`);
+              else if (item.key === 'parciales') router.push(`/materia/${subject.id}/parciales`);
+              else if (item.key === 'flashcards') router.push(`/materia/${subject.id}/flashcards`);
               else show('Disponible en una próxima etapa', 'default');
             }}
           >

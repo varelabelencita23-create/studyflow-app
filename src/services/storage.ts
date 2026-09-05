@@ -34,6 +34,9 @@ export const STORAGE_KEYS = {
   contentPlan: 'studyflow/content-plan',
   studyMaterials: 'studyflow/study-materials',
   driveConnected: 'studyflow/drive-connected',
+  exams: 'studyflow/exams',
+  flashcardDecks: 'studyflow/flashcard-decks',
+  flashcards: 'studyflow/flashcards',
 } as const;
 
 function delay(ms: number) {

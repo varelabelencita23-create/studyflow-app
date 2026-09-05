@@ -49,6 +49,11 @@ async function listFiles(subjectId: ID, category: FolderCategory): Promise<Study
   return (await readAll()).filter((material) => material.folderId === id);
 }
 
+async function getById(id: ID): Promise<StudyMaterial | null> {
+  const materials = await readAll();
+  return materials.find((material) => material.id === id) ?? null;
+}
+
 interface AddFileInput {
   name: string;
   kind: FileKind;
@@ -101,6 +106,7 @@ export const fileService = {
   FOLDER_DEFS,
   listFolders,
   listFiles,
+  getById,
   addFile,
   renameFile,
   removeFile,
