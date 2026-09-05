@@ -2,7 +2,7 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 13 — Parciales (calendario global + ritmo)** completada (incluye Etapa 10 — Banco de parciales y Etapa 11 — Flashcards; Etapa 12 — Tests queda pendiente). Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **Etapa 14 — Estadísticas** completada (incluye Etapa 12 — Tests). Las 14 etapas del spec original están terminadas. Frontend-only, sin backend todavía (mocks persistidos localmente).
 
 ## Stack
 
@@ -69,6 +69,11 @@ app/                        # Rutas (Expo Router)
         crear.tsx                    # Crear mazo: generar (mock) o manual
         [deckId]/
           estudiar.tsx                 # Modo estudio: pregunta → respuesta → no la sabía/la sabía/la dominé
+      tests.tsx                    # Dashboard de tests (dificultad, preguntas, último resultado)
+      tests/
+        crear.tsx                    # Crear test: generar (mock) o manual (opción múltiple)
+        [quizId]/
+          realizar.tsx                 # Realizar test: pregunta a pregunta → resultado → repasar errores
   parcial/
     [examId].tsx                # Visor de parcial: countdown, % preparado, ritmo, contenidos, archivo
   sesion/
@@ -80,8 +85,8 @@ app/                        # Rutas (Expo Router)
 
 src/
   theme/          # Colores, tipografía, spacing, radios, sombras (design tokens)
-  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ + content/ + exams/
-  services/       # Capa mock (auth, materias, contenidos, sesiones, plan de contenidos, archivos, Drive, parciales, flashcards, onboarding, plan semanal, storage)
+  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ + content/ + exams/ + charts/
+  services/       # Capa mock (auth, materias, contenidos, sesiones, plan de contenidos, archivos, Drive, parciales, flashcards, tests, estadísticas, onboarding, plan semanal, storage)
   store/          # AppStateProvider (estado global) + ActiveSessionProvider (timer en curso)
   hooks/          # Hooks compartidos (ej. useToast)
   types/          # Entidades de dominio (preparadas para Supabase)
@@ -143,7 +148,7 @@ La tab **Materias** tiene CRUD completo (agregar/editar/eliminar/reordenar) igua
 - Progreso general, próximo parcial (real desde la Etapa 13 — countdown al parcial más cercano de esa materia, o "—" si todavía no cargaste ninguno), días asignados esta semana, horas estudiadas, temas completados, cantidad de sesiones y promedio diario — todo calculado a partir de datos reales (contenidos, sesiones y parciales), no hardcodeado.
 - Botón **Iniciar sesión** (con guardia: si ya hay una sesión en curso en otra materia, te lleva a esa antes de perderla).
 - Últimas 3 sesiones, con acceso al detalle de cada una.
-- Grilla de accesos: **Contenidos**, **Plan de estudio**, **Archivos**, **Parciales** y **Flashcards** ya son reales; Tests queda como vista previa hasta su propia etapa.
+- Grilla de accesos: **Contenidos**, **Plan de estudio**, **Archivos**, **Parciales**, **Flashcards** y **Tests** ya son reales.
 
 ## Contenidos (Unidad → Tema → Subtema)
 
@@ -183,9 +188,26 @@ Desde "Agregar archivo", la opción **Google Drive** abre `/drive`: un conector 
 
 Desde el Home de materia, **Flashcards** (`/materia/[id]/flashcards`) muestra el dashboard con total/dominadas/en progreso/pendientes y la lista de mazos. **Crear mazo** ofrece dos modos con un segmented control: **Generar** (elegís contenidos + cantidad y arma preguntas del tipo "¿Qué podés explicar sobre X?" — un mock claramente marcado en `flashcardService.generateMockCards`, con un comentario de dónde iría una llamada real a un modelo de IA) o **Manual** (cargás pregunta/respuesta vos misma). El **modo estudio** (`/materia/[id]/flashcards/[deckId]/estudiar`) es pregunta → "Mostrar respuesta" → **No la sabía / La sabía / La dominé**, con un resumen al terminar el mazo.
 
+## Tests
+
+Desde el Home de materia, **Tests** (`/materia/[id]/tests`) muestra el dashboard con la lista de tests (dificultad, cantidad de preguntas, resultado del último intento). **Crear test** ofrece el mismo segmented control que Flashcards: **Generar** (elegís contenidos + cantidad; `quizService.generateMockQuestions` arma preguntas de opción múltiple con la respuesta correcta mezclada entre 3 distractores fijos — mock documentado) o **Manual** (cargás pregunta + 4 opciones, marcando cuál es la correcta). **Realizar test** (`/materia/[id]/tests/[quizId]/realizar`) es una pregunta a la vez con feedback inmediato (verde/rojo) al elegir, y al terminar te muestra el puntaje y una sección para **repasar errores** (tu respuesta vs. la correcta, pregunta por pregunta). Cada intento se guarda (`quizService.recordAttempt`) para que el dashboard muestre el último resultado.
+
 ## Sesiones de estudio
 
 Desde el Home de una materia, **Iniciar sesión** abre `/sesion/nueva`: elegís qué contenidos vas a estudiar (con alta rápida si te falta alguno) y un objetivo opcional (15/30/45/60 min). El timer (`/sesion/timer`) usa timestamps de reloj (no un contador ingenuo) para no perder precisión si la app pasa a segundo plano, con pausar/reanudar y cancelar. Al finalizar, `/sesion/resumen` te deja confirmar cuáles contenidos completaste de verdad y muestra tiempo estudiado, contenidos completados, progreso anterior → nuevo progreso y si cumpliste el objetivo. Todo lo maneja `ActiveSessionProvider` (estado efímero del timer) en conjunto con `contentService` y `sessionService` (persistencia).
+
+## Estadísticas
+
+El tab **Estadísticas** (antes un placeholder de la Etapa 1) es un dashboard de progreso construido con la skill de dataviz del sistema — cada gráfico se eligió por la función que cumple, no por estética, y respeta la regla de marca de un solo color de acento (nunca colores distintos por materia):
+
+- **Avance general**: `ProgressRing`, un anillo circular (SVG, `react-native-svg`) con el promedio de progreso de todas las materias activas — la cifra hero de la pantalla.
+- **Racha**: días consecutivos con al menos una sesión de estudio registrada.
+- **Hoy / Esta semana / Este mes**: minutos reales estudiados, en una fila de 3 stat tiles.
+- **Últimos 7 días**: `BarChart` en forma "emphasis" — la barra de hoy en el acento completo, el resto en gris recesivo (mismo patrón que el gráfico D/W/M de Apple Health/Fitness).
+- **Constancia**: `ActivityHeatmap`, una grilla de 70 días estilo GitHub/Apple Fitness — un solo hue, la opacidad sola codifica cuánto estudiaste ese día. Tocar un día muestra la fecha y los minutos.
+- **Avance por materia**: `RankedBarList`, una lista de barras horizontales rankeada de mayor a menor progreso — identidad por el nombre directo de la materia, magnitud por el largo de la barra (nunca por color, siguiendo la regla de acento único), con el tiempo estudiado y la cantidad de sesiones como dato secundario de cada fila.
+
+Todo sale de `statsService.ts`, que agrega las `StudySession` reales (no hay datos inventados: sin sesiones, los gráficos muestran ceros).
 
 ## Modelo de datos
 
@@ -204,9 +226,9 @@ Desde el Home de una materia, **Iniciar sesión** abre `/sesion/nueva`: elegís 
 9. ~~Integración de Google Drive (mock)~~ ✅
 10. ~~Banco de parciales~~ ✅
 11. ~~Flashcards~~ ✅
-12. Tests
+12. ~~Tests~~ ✅
 13. ~~Calendario global de parciales~~ ✅
-14. Estadísticas
+14. ~~Estadísticas~~ ✅
 15. Perfil y configuración
 16. Insights
 17. Pulido final

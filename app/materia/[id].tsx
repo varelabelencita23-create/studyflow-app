@@ -167,6 +167,7 @@ export default function SubjectDetailScreen() {
               else if (item.key === 'archivos') router.push(`/materia/${subject.id}/archivos`);
               else if (item.key === 'parciales') router.push(`/materia/${subject.id}/parciales`);
               else if (item.key === 'flashcards') router.push(`/materia/${subject.id}/flashcards`);
+              else if (item.key === 'tests') router.push(`/materia/${subject.id}/tests`);
               else show('Disponible en una próxima etapa', 'default');
             }}
           >

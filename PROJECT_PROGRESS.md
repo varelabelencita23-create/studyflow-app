@@ -1,5 +1,52 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapas completadas: 12 — Tests, 14 — Estadísticas
+
+A pedido explícito del usuario ("con cuidado y perfección"), se retomó la Etapa 12 (Tests, salteada antes) y se hizo la Etapa 14 (Estadísticas) con un pedido puntual: gráficos estilo iOS que transmitan de verdad el avance general y el de cada materia. Mismo criterio de siempre: verificación (`tsc` + `expo export` Android/iOS) después de cada etapa individual, y revisión de `git diff` de todo archivo ya existente tocado para confirmar que los cambios fueran aditivos.
+
+### Funcionalidades implementadas
+
+**Etapa 12 — Tests** (`/materia/[id]/tests`)
+- Dashboard de tests de la materia: nombre, dificultad, cantidad de preguntas y el resultado del último intento (si hubo).
+- Crear test con el mismo segmented control **Generar/Manual** que Flashcards: Generar elige contenidos + cantidad y arma preguntas de opción múltiple mock (`quizService.generateMockQuestions`, con la respuesta correcta mezclada entre 3 distractores fijos — mock documentado, con el comentario de dónde iría una llamada real a un modelo de IA); Manual carga pregunta + 4 opciones marcando cuál es la correcta.
+- Realizar test: una pregunta a la vez, feedback inmediato (verde/rojo) al elegir una opción, y al terminar un resumen con el puntaje y **repasar errores** (cada pregunta que falló, con tu respuesta y la correcta una al lado de la otra). `quizService.recordAttempt` guarda el intento para que el dashboard muestre "último: N/M".
+
+**Etapa 14 — Estadísticas** (tab `Estadísticas`, reescrita por completo)
+- Antes de tocar código se cargó la skill de dataviz del sistema y se leyeron sus tres referencias centrales (formas, color, marcas/anatomía) para decidir cada gráfico por su función, no por estética. Decisión clave: la regla de marca de StudyFlow prohíbe colores categóricos por materia (un solo acento azul-violeta), así que en vez de un donut de "distribución por materia" (que la skill tampoco recomienda como forma por defecto) se usó una **lista de barras rankeada** — identidad por el nombre directo, magnitud por el largo de la barra, un solo hue.
+- **Avance general**: `ProgressRing` (anillo circular en SVG, `react-native-svg` recién instalado para esto) con el promedio de `subject.progress` de todas las materias activas — la única cifra que la screen encabeza, en tamaño hero.
+- **Racha**: días consecutivos con al menos una sesión registrada (con ícono de llama), calculada en `statsService.getOverview`.
+- **Hoy / Esta semana / Este mes**: KPI row de 3 stat tiles con minutos reales agregados de `StudySession`.
+- **Últimos 7 días**: `BarChart` en forma de "emphasis" (una serie es el punto, el resto es contexto) — la barra de hoy en el acento completo, el resto en gris recesivo, tal como el patrón D/W/M de Apple Health/Fitness.
+- **Constancia**: `ActivityHeatmap`, grid de 70 días (10 semanas) estilo GitHub/Apple Fitness — un solo hue, la opacidad sola codifica magnitud; tocar un día muestra fecha + minutos (el equivalente táctil de un hover en mobile).
+- **Avance por materia**: `RankedBarList` con el progreso real (0-100%) de cada materia ordenado de mayor a menor, más una línea secundaria con el tiempo y la cantidad de sesiones de esa materia — así una sola lista responde tanto "cuánto avancé" como "cuánto estudié" por materia, sin necesitar dos gráficos redundantes.
+- `statsService.ts` (nuevo): agrega sesiones reales (`sessionService.listAll`, agregado ahora) en las 3 formas que necesitan los gráficos — overview (hoy/semana/mes/total/racha), actividad diaria (para barras y heatmap) y desglose de tiempo por materia. Nada de esto se inventa: si no hay sesiones, los gráficos muestran ceros reales, no placeholders.
+
+### Archivos importantes creados
+
+- `src/services/quizService.ts`, `src/services/statsService.ts`.
+- `app/materia/[id]/tests.tsx`, `app/materia/[id]/tests/crear.tsx`, `app/materia/[id]/tests/[quizId]/realizar.tsx`.
+- `src/components/charts/ProgressRing.tsx`, `BarChart.tsx`, `ActivityHeatmap.tsx`, `RankedBarList.tsx` (+ `index.ts`).
+- Modificados (aditivos, ver `git diff` en la verificación): `src/services/storage.ts` (+3 claves), `src/services/index.ts` (+2 exports), `src/services/sessionService.ts` (+`listAll`), `app/materia/[id].tsx` (wire del acceso 'tests'), `app/_layout.tsx` (registro de las 3 rutas nuevas de tests), `package.json`/`package-lock.json` (+`react-native-svg@15.15.4`, versión exacta confirmada en `bundledNativeModules.json` del SDK). Reescrito por completo (deliberado, no accidental): `app/(tabs)/estadisticas.tsx`, el placeholder de la Etapa 1.
+
+### Problemas encontrados y solucionados
+
+1. **Error de tipos en el feedback visual de "realizar test"**: el color de fondo de cada opción (correcta/incorrecta/neutral) se armaba mezclando objetos de estilo con spread (`{...styles.optionRow, ...styles.optionRowCorrect}`), y TypeScript infería el tipo del objeto resultante a partir del primer spread, rechazando el `backgroundColor` distinto del segundo. Se corrigió pasando un array de estilos (`[styles.optionRow, condición && styles.optionRowCorrect, ...]`) al prop `style`, el patrón estándar de React Native para estilos condicionales.
+2. **`StyleSheet.absoluteFillObject` no existe en los tipos de RN de este SDK** (ya documentado en la Etapa 1, pero se repitió el mismo error al centrar el texto del `ProgressRing` sobre el SVG). Se usó `StyleSheet.absoluteFill` de nuevo.
+3. Se revisó preventivamente que ninguna pantalla nueva repitiera el bug de carrera de estado de la Etapa 13 (un `setState` con datos parciales seguido de un `await` antes del resto): todas las pantallas nuevas juntan sus datos con `Promise.all` antes de actualizar cualquier estado.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` → sin errores, verificado después de la Etapa 12, después de instalar `react-native-svg`, y otra vez después de la Etapa 14 completa.
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso en cada checkpoint (incluida una verificación final combinada de ambas etapas).
+- `git diff --stat` y revisión línea por línea de cada archivo ya existente tocado, confirmando que los cambios fueran aditivos (salvo la reescritura deliberada del placeholder de la tab Estadísticas).
+- Revisión manual del código de cada gráfico contra la skill de dataviz: un solo hue de acento en todos lados (nunca color por materia), leyenda omitida donde hay una sola serie, valores redondeados prolijos, gridline recesiva en el bar chart, radios de 4px en las puntas de las barras.
+
+### Siguiente etapa
+
+Con esto se completan las 14 etapas del spec original (la 12 estaba pendiente, ya no lo está). Quedan disponibles como posibles siguientes pasos: conectar Supabase real (reemplazando la capa `src/services` sin tocar la UI, tal como fue diseñada desde la Etapa 1), pickers reales de cámara/galería/documentos, y una integración real de generación de preguntas/tarjetas con IA en lugar de los mocks de `quizService`/`flashcardService`.
+
+---
+
 ## Etapas completadas: 10 — Banco de parciales, 11 — Flashcards, 13 — Parciales (calendario global + ritmo)
 
 A pedido explícito del usuario, se salteó la Etapa 12 (Tests) y se hicieron estas tres juntas, con el mismo cuidado de la vez anterior: verificación (`tsc` + `expo export` Android/iOS) después de cada etapa, y revisión de `git diff` de todo archivo ya existente que se tocara para confirmar que fuera aditivo. La Etapa 10 y la Etapa 13 comparten el mismo modelo de datos (`Exam`), así que se construyeron coordinadas para no dejarlas inconsistentes entre sí.

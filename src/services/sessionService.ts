@@ -10,6 +10,10 @@ async function readAll(): Promise<StudySession[]> {
 }
 
 export const sessionService = {
+  async listAll(): Promise<StudySession[]> {
+    return readAll();
+  },
+
   async listBySubject(subjectId: ID): Promise<StudySession[]> {
     const sessions = await readAll();
     return sessions

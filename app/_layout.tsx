@@ -45,6 +45,9 @@ function RootNavigator() {
       <Stack.Screen name="materia/[id]/flashcards" options={{ presentation: 'card' }} />
       <Stack.Screen name="materia/[id]/flashcards/crear" options={{ presentation: 'card' }} />
       <Stack.Screen name="materia/[id]/flashcards/[deckId]/estudiar" options={{ presentation: 'card' }} />
+      <Stack.Screen name="materia/[id]/tests" options={{ presentation: 'card' }} />
+      <Stack.Screen name="materia/[id]/tests/crear" options={{ presentation: 'card' }} />
+      <Stack.Screen name="materia/[id]/tests/[quizId]/realizar" options={{ presentation: 'card' }} />
       <Stack.Screen name="parcial/[examId]" options={{ presentation: 'card' }} />
       <Stack.Screen name="sesion/nueva" options={{ presentation: 'card' }} />
       <Stack.Screen name="sesion/timer" options={{ presentation: 'card', gestureEnabled: false }} />

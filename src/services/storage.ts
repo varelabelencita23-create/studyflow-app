@@ -37,6 +37,9 @@ export const STORAGE_KEYS = {
   exams: 'studyflow/exams',
   flashcardDecks: 'studyflow/flashcard-decks',
   flashcards: 'studyflow/flashcards',
+  quizzes: 'studyflow/quizzes',
+  quizQuestions: 'studyflow/quiz-questions',
+  quizAttempts: 'studyflow/quiz-attempts',
 } as const;
 
 function delay(ms: number) {
