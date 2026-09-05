@@ -2,7 +2,7 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 3 — Home / Planificador semanal** completada. Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **Etapa 5 — Materias** completada (incluye Etapa 4 — Sesiones de estudio). Frontend-only, sin backend todavía (mocks persistidos localmente).
 
 ## Stack
 
@@ -56,17 +56,24 @@ app/                        # Rutas (Expo Router)
     study-mode.tsx                  # Modalidad de estudio (Estándar/Profundo/Libre)
     complete.tsx                     # Configuración completada
   materia/
-    [id].tsx                    # Contexto de una materia (accesos a Contenidos/Plan/Archivos/...)
+    [id].tsx                    # Home de la materia: progreso, stats, sesiones recientes, accesos
+    [id]/
+      contenidos.tsx             # Checklist de contenidos (flat MVP) de esa materia
+  sesion/
+    nueva.tsx                   # Setup: elegir contenidos a estudiar + objetivo
+    timer.tsx                    # Timer con pausar/reanudar/finalizar
+    resumen.tsx                   # Confirmar completados + resumen de la sesión
+    [sessionId].tsx                 # Detalle de una sesión pasada
 
 src/
   theme/          # Colores, tipografía, spacing, radios, sombras (design tokens)
-  components/     # SplashView + ui/ (librería reutilizable) + planner/ (planificador semanal)
-  services/       # Capa mock (auth, materias, onboarding, plan semanal, storage)
-  store/          # AppStateProvider — estado global (sesión, materias, modalidad, plan semanal)
+  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ (SubjectFormSheet)
+  services/       # Capa mock (auth, materias, contenidos, sesiones, onboarding, plan semanal, storage)
+  store/          # AppStateProvider (estado global) + ActiveSessionProvider (timer en curso)
   hooks/          # Hooks compartidos (ej. useToast)
   types/          # Entidades de dominio (preparadas para Supabase)
   constants/      # Constantes de layout y app
-  utils/          # Helpers (ids, validadores, fechas de la semana)
+  utils/          # Helpers (ids, validadores, fechas de la semana, formato de duración)
 ```
 
 ### Alias de importación
@@ -113,8 +120,21 @@ El tab **Inicio** es el planificador semanal real (no un calendario de horarios)
 
 - El drag & drop usa `react-native-gesture-handler` (`Gesture.Pan`) + `react-native-reanimated` (`measure()` sobre `useAnimatedRef`) para detectar en qué día se soltó la materia sin pasar por el hilo de JS en cada frame — el chip vuelve a su lugar con un spring tras cada suelte.
 - Si tenés más materias que el máximo de tu modalidad de estudio, un botón "Editar" abre un selector (`WeekSubjectPicker`) para elegir cuáles están activas esta semana.
-- Tocar una materia asignada navega a `/materia/[id]`, el "contexto" de esa materia (progreso, días asignados, accesos a Contenidos/Plan de estudio/Archivos/Parciales/Flashcards/Tests — todavía como vista previa hasta la Etapa 5).
+- Tocar una materia asignada navega a `/materia/[id]`, el "contexto" de esa materia.
 - Todo se persiste por semana (`weeklyPlanService`, clave `studyflow/weekly-plan/<lunes-de-la-semana>`) para que cerrar y reabrir la app conserve la distribución.
+
+## Materias y Home de materia
+
+La tab **Materias** tiene CRUD completo (agregar/editar/eliminar/reordenar) igual que en el onboarding — ambas pantallas comparten el bottom sheet `SubjectFormSheet`. Tocar una materia entra a su **Home** (`/materia/[id]`), que se siente como el "universo" de esa materia:
+
+- Progreso general, próximo parcial (placeholder honesto hasta la Etapa 13 — no se inventan datos), días asignados esta semana, horas estudiadas, temas completados, cantidad de sesiones y promedio diario — todo calculado a partir de datos reales (contenidos y sesiones), no hardcodeado.
+- Botón **Iniciar sesión** (con guardia: si ya hay una sesión en curso en otra materia, te lleva a esa antes de perderla).
+- Últimas 3 sesiones, con acceso al detalle de cada una.
+- Grilla de accesos: **Contenidos** ya es real (checklist con progreso); Plan de estudio, Archivos, Parciales, Flashcards y Tests quedan como vista previa hasta sus propias etapas.
+
+## Sesiones de estudio
+
+Desde el Home de una materia, **Iniciar sesión** abre `/sesion/nueva`: elegís qué contenidos vas a estudiar (con alta rápida si te falta alguno) y un objetivo opcional (15/30/45/60 min). El timer (`/sesion/timer`) usa timestamps de reloj (no un contador ingenuo) para no perder precisión si la app pasa a segundo plano, con pausar/reanudar y cancelar. Al finalizar, `/sesion/resumen` te deja confirmar cuáles contenidos completaste de verdad y muestra tiempo estudiado, contenidos completados, progreso anterior → nuevo progreso y si cumpliste el objetivo. Todo lo maneja `ActiveSessionProvider` (estado efímero del timer) en conjunto con `contentService` y `sessionService` (persistencia).
 
 ## Modelo de datos
 
@@ -125,9 +145,9 @@ El tab **Inicio** es el planificador semanal real (no un calendario de horarios)
 1. ~~Foundation + Design System~~ ✅
 2. ~~Onboarding (splash, login/registro, selección de materias, modalidad de estudio)~~ ✅
 3. ~~Home / Planificador semanal (drag & drop de materias sobre los días)~~ ✅
-4. Sesiones de estudio (timer, pausas, resumen)
-5. Materias (home de materia, accesos a contenidos/plan/archivos/parciales/flashcards/tests)
-6. Contenidos jerárquicos (unidad → tema → subtema)
+4. ~~Sesiones de estudio (timer, pausas, resumen)~~ ✅
+5. ~~Materias (home de materia, accesos a contenidos/plan/archivos/parciales/flashcards/tests)~~ ✅
+6. Contenidos jerárquicos (unidad → tema → subtema — hoy son un checklist plano, sin unidades/subtemas todavía)
 7. Planificación por materia
 8. Archivos (biblioteca estilo Finder)
 9. Integración de Google Drive (mock)

@@ -27,6 +27,8 @@ export const STORAGE_KEYS = {
   studyModeConfig: 'studyflow/study-mode-config',
   onboardingCompleted: 'studyflow/onboarding-completed',
   weeklyPlanPrefix: 'studyflow/weekly-plan/',
+  topics: 'studyflow/topics',
+  sessions: 'studyflow/sessions',
 } as const;
 
 function delay(ms: number) {

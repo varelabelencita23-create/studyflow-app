@@ -68,6 +68,15 @@ export const subjectsService = {
     return next;
   },
 
+  async setProgress(id: string, progress: number): Promise<Subject[]> {
+    const subjects = await readAll();
+    const next = subjects.map((subject) =>
+      subject.id === id ? { ...subject, progress, updatedAt: new Date().toISOString() } : subject,
+    );
+    await storage.set(STORAGE_KEYS.subjects, next);
+    return next;
+  },
+
   async reorder(orderedIds: string[]): Promise<Subject[]> {
     const subjects = await readAll();
     const byId = new Map(subjects.map((subject) => [subject.id, subject]));

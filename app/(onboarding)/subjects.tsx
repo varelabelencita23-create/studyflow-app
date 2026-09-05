@@ -1,14 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
-import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
-import { useToast } from '@/hooks/useToast';
+import { SubjectFormSheet } from '@/components/subjects';
 import { useAppState } from '@/store';
 import { Subject } from '@/types';
 import { colors, radius, spacing, typography } from '@/theme';
@@ -16,57 +14,20 @@ import { colors, radius, spacing, typography } from '@/theme';
 export default function SubjectsScreen() {
   const router = useRouter();
   const { subjects, addSubject, updateSubject, removeSubject, reorderSubjects } = useAppState();
-  const { show } = useToast();
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
-  const [name, setName] = useState('');
-  const [professor, setProfessor] = useState('');
-  const [saving, setSaving] = useState(false);
 
   const sortedSubjects = [...subjects].sort((a, b) => a.order - b.order);
 
   const openCreateSheet = () => {
     setEditingSubject(null);
-    setName('');
-    setProfessor('');
     setSheetVisible(true);
   };
 
   const openEditSheet = (subject: Subject) => {
     setEditingSubject(subject);
-    setName(subject.name);
-    setProfessor(subject.professor ?? '');
     setSheetVisible(true);
-  };
-
-  const handleSave = async () => {
-    if (name.trim().length < 2) {
-      show('Ingresá el nombre de la materia', 'error');
-      return;
-    }
-    setSaving(true);
-    try {
-      if (editingSubject) {
-        await updateSubject(editingSubject.id, { name, professor });
-        show('Materia actualizada', 'success');
-      } else {
-        await addSubject({ name, professor });
-        show('Materia agregada', 'success');
-      }
-      setSheetVisible(false);
-    } catch (error) {
-      show(error instanceof Error ? error.message : 'Algo salió mal', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!editingSubject) return;
-    await removeSubject(editingSubject.id);
-    show('Materia eliminada', 'default');
-    setSheetVisible(false);
   };
 
   const moveSubject = (index: number, direction: -1 | 1) => {
@@ -148,34 +109,16 @@ export default function SubjectsScreen() {
         style={styles.continueButton}
       />
 
-      <BottomSheet visible={sheetVisible} onClose={() => setSheetVisible(false)}>
-        <Text style={styles.sheetTitle}>{editingSubject ? 'Editar materia' : 'Nueva materia'}</Text>
-        <View style={styles.sheetForm}>
-          <Input
-            label="Nombre"
-            placeholder="Ej. Sistemas Operativos"
-            value={name}
-            onChangeText={setName}
-            leftIcon="book-outline"
-          />
-          <Input
-            label="Profesor (opcional)"
-            placeholder="Ej. Ana Gómez"
-            value={professor}
-            onChangeText={setProfessor}
-            leftIcon="person-outline"
-          />
-          <Button
-            label={editingSubject ? 'Guardar cambios' : 'Agregar materia'}
-            fullWidth
-            loading={saving}
-            onPress={handleSave}
-          />
-          {editingSubject && (
-            <Button label="Eliminar materia" variant="destructive" fullWidth onPress={handleDelete} />
-          )}
-        </View>
-      </BottomSheet>
+      <SubjectFormSheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        editingSubject={editingSubject}
+        onSave={async (input) => {
+          if (editingSubject) await updateSubject(editingSubject.id, input);
+          else await addSubject(input);
+        }}
+        onDelete={(subject) => removeSubject(subject.id)}
+      />
     </Screen>
   );
 }
@@ -243,13 +186,5 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     marginTop: spacing.xxxl,
-  },
-  sheetTitle: {
-    ...typography.title3,
-    color: colors.textPrimary,
-    marginBottom: spacing.lg,
-  },
-  sheetForm: {
-    gap: spacing.lg,
   },
 });

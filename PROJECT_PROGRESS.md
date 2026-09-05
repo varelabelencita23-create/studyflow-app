@@ -1,5 +1,54 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapas completadas: 4 — Sesiones de estudio y 5 — Materias
+
+Se hicieron juntas a pedido del usuario, ya que están acopladas: las sesiones necesitan contenidos reales para poder "seleccionar contenidos estudiados", y el Home de materia de la Etapa 5 necesita sesiones reales para mostrar sus estadísticas.
+
+### Funcionalidades implementadas
+
+**Etapa 4 — Sesiones de estudio**
+- `ActiveSessionProvider`: estado efímero (en memoria, no persistido) del timer en curso — `startSession`, `pause`, `resume`, `discardSession`, `finalize`. El tiempo se calcula con timestamps de reloj (`Date.now()`), no acumulando segundos con un `setInterval` ingenuo, para no perder precisión si la app pasa a segundo plano.
+- `/sesion/nueva`: elegir contenidos a estudiar (con alta rápida inline si falta alguno) + objetivo opcional (chips 15/30/45/60 min).
+- `/sesion/timer`: timer grande, pausar/reanudar, barra de progreso hacia el objetivo si hay uno, cancelar (con confirmación) y finalizar. No se puede descartar arrastrando hacia atrás (`gestureEnabled: false`).
+- `/sesion/resumen`: confirmar qué contenidos se completaron de verdad (todos pre-tildados) y, al guardar, resumen con tiempo estudiado, contenidos completados, progreso anterior → nuevo progreso y si se cumplió el objetivo.
+- `/sesion/[sessionId]`: detalle de una sesión pasada (accesible desde el Home de materia).
+- Guardia de sesión única: si ya hay una sesión en curso (en cualquier materia) y el usuario toca "Iniciar sesión" en otra, se lo lleva al timer en curso en vez de perderlo silenciosamente.
+
+**Etapa 5 — Materias**
+- Tab **Materias**: CRUD completo (agregar/editar/eliminar/reordenar), igual que en el onboarding — ambas pantallas comparten el bottom sheet `SubjectFormSheet` (extraído para no duplicar el formulario).
+- **Home de materia** (`/materia/[id]`) reescrito con datos reales: progreso general, días asignados esta semana, horas estudiadas, temas completados, cantidad de sesiones y promedio diario (minutos/día con sesión), todos calculados a partir de `contentService`/`sessionService` (nada hardcodeado). "Próximo parcial" queda como placeholder honesto ("—") hasta la Etapa 13, en vez de inventar un dato.
+- **Contenidos** (`/materia/[id]/contenidos`): checklist plano de contenidos por materia (crear/editar/eliminar/marcar completado). Es una versión MVP: todavía no tiene unidades ni subtemas (eso es la Etapa 6) — cada contenido ya usa el tipo `Topic` real, apuntando a una unidad "default" determinística por materia, para que la Etapa 6 pueda migrar a unidades reales sin romper los datos ya creados.
+- El resto de los accesos del Home de materia (Plan de estudio, Archivos, Parciales, Flashcards, Tests) siguen como vista previa ("disponible en una próxima etapa"), consistente con cómo se manejó en la Etapa 3.
+
+### Archivos importantes creados
+
+- `src/services/contentService.ts` (CRUD de `Topic` + `applySessionOutcome` + `recomputeSubjectProgress`), `src/services/sessionService.ts` (CRUD de `StudySession`).
+- `src/store/ActiveSessionProvider.tsx`.
+- `src/components/subjects/SubjectFormSheet.tsx`.
+- `src/utils/format.ts` (`formatClock`, `formatDuration`, `formatShortDate`).
+- `app/sesion/nueva.tsx`, `timer.tsx`, `resumen.tsx`, `[sessionId].tsx`.
+- `app/materia/[id]/contenidos.tsx`.
+- Modificados: `app/materia/[id].tsx` (reescrita), `app/(tabs)/materias.tsx` (reescrita), `app/(onboarding)/subjects.tsx` (refactorizada para usar `SubjectFormSheet`), `src/services/subjectsService.ts` (+`setProgress`), `src/store/AppStateProvider.tsx` (+`refreshSubjects`), `app/_layout.tsx` (+`ActiveSessionProvider`, nuevas rutas).
+
+### Problemas encontrados y solucionados
+
+1. **Los tipos de rutas de Expo Router siguen sin regenerarse con `expo export`** (mismo problema ya documentado en Etapas 2 y 3, ahora con las rutas `sesion/*` y `materia/[id]/contenidos`). Misma solución: correr `npx expo start` brevemente para forzar el escaneo antes de tipar.
+2. **Posible carrera de navegación al descartar una sesión**: el timer tenía un único `useEffect` que, al detectar `activeSession === null`, redirigía a `/(tabs)` — pero `discardSession()`/`finalize()` también ponen `activeSession` en null y navegan explícitamente a otra pantalla, así que las dos navegaciones podían competir. Solución: separar el guard de "sin sesión al entrar" (efecto que corre una sola vez, al montar) del intervalo del timer (que ahora además solo corre mientras `isRunning` es `true`, evitando ticks innecesarios en pausa).
+3. **Evitar duplicar el recálculo de progreso de una materia**: tanto finalizar una sesión como marcar un contenido como completado manualmente necesitan recalcular `subject.progress`. Se centralizó en `contentService.recomputeSubjectProgress(subjectId)`, usado desde `ActiveSessionProvider.finalize` y desde la pantalla de Contenidos.
+4. **Acceso a `docs.expo.dev` sigue bloqueado por el proxy de red del entorno** (instrucción de `AGENTS.md`). Mismo enfoque que en etapas anteriores: verificar los tipos reales instalados (`useFocusEffect` de `expo-router`, tipos de `Topic`/`StudySession`) y validar todo con `tsc` + `expo export`.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` → sin errores (con los tipos de rutas regenerados).
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso.
+- Revisión manual del flujo completo: Home de materia → nueva sesión (con alta rápida de contenido) → timer (pausar/reanudar) → resumen (confirmar completados) → vuelta al Home con progreso actualizado; y por separado, marcar contenidos como completados desde `/contenidos` y confirmar que el progreso de la materia se actualiza en Materias, Home de materia y el planificador semanal.
+
+### Siguiente etapa
+
+**Etapa 6 — Contenidos jerárquicos**: convertir el checklist plano actual en una jerarquía real Unidad → Tema → Subtema, con estado/progreso/prioridad/dificultad/fecha objetivo/marca de "importante para el parcial" por ítem, expandir/contraer, y migración de las unidades "default" creadas en la Etapa 5 a unidades reales editables.
+
+---
+
 ## Etapa completada: 3 — Home / Planificador semanal
 
 ### Funcionalidades implementadas

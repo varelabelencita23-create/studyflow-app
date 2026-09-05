@@ -13,7 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SplashView } from '@/components/SplashView';
 import { ToastProvider } from '@/components/ui/Toast';
-import { AppStateProvider, useAppState } from '@/store';
+import { ActiveSessionProvider, AppStateProvider, useAppState } from '@/store';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -37,6 +37,11 @@ function RootNavigator() {
       <Stack.Screen name="(onboarding)" />
       <Stack.Screen name="design-system" options={{ presentation: 'card' }} />
       <Stack.Screen name="materia/[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="materia/[id]/contenidos" options={{ presentation: 'card' }} />
+      <Stack.Screen name="sesion/nueva" options={{ presentation: 'card' }} />
+      <Stack.Screen name="sesion/timer" options={{ presentation: 'card', gestureEnabled: false }} />
+      <Stack.Screen name="sesion/resumen" options={{ presentation: 'card', gestureEnabled: false }} />
+      <Stack.Screen name="sesion/[sessionId]" options={{ presentation: 'card' }} />
     </Stack>
   );
 }
@@ -63,10 +68,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AppStateProvider>
-          <ToastProvider>
-            <StatusBar style="light" />
-            <RootNavigator />
-          </ToastProvider>
+          <ActiveSessionProvider>
+            <ToastProvider>
+              <StatusBar style="light" />
+              <RootNavigator />
+            </ToastProvider>
+          </ActiveSessionProvider>
         </AppStateProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

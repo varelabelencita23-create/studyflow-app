@@ -41,6 +41,9 @@ interface AppStateContextValue {
   setWeekSelectedSubjects: (subjectIds: ID[]) => Promise<void>;
   assignSubjectToDay: (day: WeekDay, subjectId: ID) => Promise<void>;
   clearDayAssignment: (day: WeekDay) => Promise<void>;
+
+  /** Re-reads the subjects list from storage — used after a mutation made outside this context (e.g. a session finalizing and updating a subject's progress). */
+  refreshSubjects: () => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -183,6 +186,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [weekStartDate],
   );
 
+  const refreshSubjects = useCallback(async () => {
+    const next = await subjectsService.list();
+    setSubjects(next);
+  }, []);
+
   const value = useMemo<AppStateContextValue>(
     () => ({
       isLoading,
@@ -205,6 +213,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setWeekSelectedSubjects,
       assignSubjectToDay,
       clearDayAssignment,
+      refreshSubjects,
     }),
     [
       isLoading,
@@ -227,6 +236,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setWeekSelectedSubjects,
       assignSubjectToDay,
       clearDayAssignment,
+      refreshSubjects,
     ],
   );
 
