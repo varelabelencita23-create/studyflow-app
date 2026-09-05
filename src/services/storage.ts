@@ -31,6 +31,9 @@ export const STORAGE_KEYS = {
   topics: 'studyflow/topics',
   subtopics: 'studyflow/subtopics',
   sessions: 'studyflow/sessions',
+  contentPlan: 'studyflow/content-plan',
+  studyMaterials: 'studyflow/study-materials',
+  driveConnected: 'studyflow/drive-connected',
 } as const;
 
 function delay(ms: number) {

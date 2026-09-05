@@ -1,5 +1,52 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapas completadas: 7 — Planificación por materia, 8 — Archivos, 9 — Google Drive (mock)
+
+Se hicieron juntas a pedido del usuario ("con cuidado de que esté todo bien y sin romper nada"). Por eso, además del trabajo de cada etapa, se verificó `tsc` + `expo export` (Android e iOS) **después de cada etapa individual**, no solo al final, y todos los cambios a archivos ya existentes se revisaron con `git diff` para confirmar que fueran puramente aditivos (solo 4 archivos existentes tocados, +12 líneas en total, 0 líneas eliminadas — el resto son archivos nuevos).
+
+### Funcionalidades implementadas
+
+**Etapa 7 — Planificación por materia** (`/materia/[id]/plan`)
+- Contenido pendiente (temas no completados) para asignar a un día específico dentro de los días que la materia ya tiene en el planificador semanal (o los 7 días si no tiene ninguno todavía).
+- "Plan de la semana": por cada día disponible, qué contenido tiene asignado (o "Sin contenido asignado"), con botón para quitarlo.
+- Progreso general y "próximo parcial" con el mismo placeholder honesto ("—") que el Home de materia, sin inventar datos.
+- `contentPlanService` (nuevo): un contenido solo puede estar asignado a un día a la vez (asignar de nuevo reemplaza el día anterior).
+
+**Etapa 8 — Archivos** (`/materia/[id]/archivos` y `/materia/[id]/archivos/[category]`)
+- Biblioteca estilo Finder con las 5 carpetas fijas del spec (Apuntes, Clases, Trabajos prácticos, Parciales, Material extra) — no son creables/eliminables, son la estructura misma; se computan on-the-fly con un id determinístico, sin necesitar sus propios registros persistidos.
+- Dentro de cada carpeta: lista de archivos, estado vacío, agregar archivo (Dispositivo/Cámara/Galería/Google Drive), y por archivo: detalle + renombrar + eliminar.
+- **Decisión deliberada de alcance**: no se instalaron `expo-image-picker`/`expo-document-picker` en esta pasada. El spec dice explícitamente que la subida real a Supabase no hace falta todavía; instalar nuevos módulos nativos de cámara/galería habría aumentado el riesgo de romper algo verificable solo por `tsc`/`expo export` en este entorno (sin dispositivo real para probar permisos de cámara), así que Dispositivo/Cámara/Galería generan un registro mock con nombre autogenerado (ej. "Foto 2.jpg"), y `fileService.ts` deja comentado el punto exacto de integración real.
+
+**Etapa 9 — Google Drive (mock)** (`/drive`)
+- Estado "no conectado" → botón "Conectar Google Drive" (mock, con persistencia de la conexión). Conectado → explorador de carpetas/archivos ficticios (navegación in/out), selección múltiple, "Importar (n)".
+- Se llega desde "Agregar archivo" en Archivos, pasando `subjectId` y `category` por query params; al importar, crea los `StudyMaterial` correspondientes con `source: 'google-drive'` y vuelve a la carpeta de origen.
+- `driveService.ts` documenta en comentarios dónde iría la integración real (OAuth, Drive API `files.list`/`files.get` en lugar de los datos mock).
+
+### Archivos importantes creados
+
+- `src/services/contentPlanService.ts`, `src/services/fileService.ts`, `src/services/driveService.ts`.
+- `app/materia/[id]/plan.tsx`, `app/materia/[id]/archivos.tsx`, `app/materia/[id]/archivos/[category].tsx`, `app/drive.tsx`.
+- Modificados (solo adiciones, ver arriba): `src/services/storage.ts` (+3 claves), `src/services/index.ts` (+3 exports), `app/materia/[id].tsx` (2 líneas: wire de los accesos 'plan' y 'archivos'), `app/_layout.tsx` (registro de las 5 rutas nuevas).
+
+### Problemas encontrados y solucionados
+
+1. **Bug potencial (no confirmado, corregido preventivamente) en `/drive`**: al filtrar los archivos seleccionados (`selectedIds.map(...).filter(file => !!file)`), el resultado podía tipar como `(MockDriveFile | undefined)[]` en vez de `MockDriveFile[]`, dependiendo de qué tan bien infiera TypeScript la narrowing de un `!!file` sin predicado explícito. `tsc` no marcó error, pero se corrigió igual usando un predicado de tipo explícito (`(file): file is MockDriveFile => !!file`) para no depender de esa inferencia.
+2. **Orden de verificación entre Etapas 8 y 9**: la pantalla de Archivos referencia `/drive` (Etapa 9) antes de que esa ruta existiera, así que el chequeo intermedio de la Etapa 8 mostraba un único error de tipos esperado (la ruta no existía todavía) — se confirmó que era el único error, que el bundler igual empaquetaba sin problemas (los tipos de ruta son solo de compilación), y se resolvió al construir la Etapa 9 a continuación.
+3. **Acceso a `docs.expo.dev` sigue bloqueado** por el proxy de red del entorno (mismo problema de siempre) — no fue necesario para este trabajo, que es lógica de dominio y pantallas nuevas, no APIs de Expo.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` → sin errores, verificado **después de cada una de las 3 etapas** (no solo al final).
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso en cada checkpoint intermedio y en la verificación final.
+- `git diff` de los 4 archivos ya existentes que se tocaron, confirmando que fueran cambios puramente aditivos (sin líneas eliminadas ni lógica existente modificada).
+- Revisión manual: planificar contenido pendiente a un día y verificar que aparece en "Plan de la semana"; agregar archivos mock en cada una de las 5 carpetas y verificar el conteo en la lista de carpetas; conectar Google Drive, navegar la estructura mock, importar archivos y verificar que aparecen en la carpeta de origen con `source: 'google-drive'`.
+
+### Siguiente etapa
+
+**Etapa 10 — Banco de parciales**: banco de parciales por materia organizado por año (carpetas tipo "2026 → Parcial 1, Parcial 2, Recuperatorio"), agregar parcial (cámara/galería/PDF/Word/archivo, mock) y un visor de parcial.
+
+---
+
 ## Etapa completada: 6 — Contenidos jerárquicos
 
 ### Funcionalidades implementadas

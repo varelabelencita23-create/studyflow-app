@@ -2,7 +2,7 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 6 — Contenidos jerárquicos** completada. Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **Etapa 9 — Google Drive (mock)** completada (incluye Etapa 7 — Planificación por materia y Etapa 8 — Archivos). Frontend-only, sin backend todavía (mocks persistidos localmente).
 
 ## Stack
 
@@ -59,16 +59,21 @@ app/                        # Rutas (Expo Router)
     [id].tsx                    # Home de la materia: progreso, stats, sesiones recientes, accesos
     [id]/
       contenidos.tsx             # Árbol Unidad → Tema → Subtema (expandir/colapsar, CRUD, progreso en cascada)
+      plan.tsx                    # Planificación por materia: asignar contenido pendiente a días
+      archivos.tsx                 # Biblioteca de archivos: lista de carpetas (5 categorías fijas)
+      archivos/
+        [category].tsx              # Archivos dentro de una carpeta: agregar/renombrar/eliminar
   sesion/
     nueva.tsx                   # Setup: elegir contenidos a estudiar + objetivo
     timer.tsx                    # Timer con pausar/reanudar/finalizar
     resumen.tsx                   # Confirmar completados + resumen de la sesión
     [sessionId].tsx                 # Detalle de una sesión pasada
+  drive.tsx                    # Explorador mock de Google Drive para importar archivos
 
 src/
   theme/          # Colores, tipografía, spacing, radios, sombras (design tokens)
-  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ (SubjectFormSheet) + content/ (ContentMetaSheet)
-  services/       # Capa mock (auth, materias, contenidos, sesiones, onboarding, plan semanal, storage)
+  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ + content/
+  services/       # Capa mock (auth, materias, contenidos, sesiones, plan de contenidos, archivos, Drive, onboarding, plan semanal, storage)
   store/          # AppStateProvider (estado global) + ActiveSessionProvider (timer en curso)
   hooks/          # Hooks compartidos (ej. useToast)
   types/          # Entidades de dominio (preparadas para Supabase)
@@ -130,7 +135,7 @@ La tab **Materias** tiene CRUD completo (agregar/editar/eliminar/reordenar) igua
 - Progreso general, próximo parcial (placeholder honesto hasta la Etapa 13 — no se inventan datos), días asignados esta semana, horas estudiadas, temas completados, cantidad de sesiones y promedio diario — todo calculado a partir de datos reales (contenidos y sesiones), no hardcodeado.
 - Botón **Iniciar sesión** (con guardia: si ya hay una sesión en curso en otra materia, te lleva a esa antes de perderla).
 - Últimas 3 sesiones, con acceso al detalle de cada una.
-- Grilla de accesos: **Contenidos** ya es real (árbol con progreso); Plan de estudio, Archivos, Parciales, Flashcards y Tests quedan como vista previa hasta sus propias etapas.
+- Grilla de accesos: **Contenidos**, **Plan de estudio** y **Archivos** ya son reales; Parciales, Flashcards y Tests quedan como vista previa hasta sus propias etapas.
 
 ## Contenidos (Unidad → Tema → Subtema)
 
@@ -143,6 +148,20 @@ El progreso se calcula en cascada, siempre de abajo hacia arriba:
 - El **progreso de la materia** (mostrado en Materias, el Home de materia y el planificador semanal) es el promedio de todos sus temas — ya no un simple conteo de completados/total, para reflejar mejor el progreso parcial que viene de subtemas.
 
 Las materias creadas en la Etapa 5 (contenidos planos, sin unidades) se migran automáticamente a una unidad "General" la primera vez que se abre esta pantalla, sin perder el progreso ya registrado.
+
+## Planificación por materia
+
+`/materia/[id]/plan` toma el contenido pendiente (temas no completados) y deja asignarlo a un día específico dentro de los días que esa materia ya tiene en el planificador semanal (o los 7 días si todavía no le asignaste ninguno). Muestra progreso general, cuánto te falta planificar y — igual que en el Home de materia — un placeholder honesto para "próximo parcial" hasta la Etapa 13. Un contenido solo puede estar asignado a un día a la vez; se persiste con `contentPlanService`.
+
+## Archivos
+
+`/materia/[id]/archivos` es una biblioteca estilo Finder con 5 carpetas fijas por materia (**Apuntes, Clases, Trabajos prácticos, Parciales, Material extra**) — no son creables ni eliminables, son la estructura misma. Adentro de cada una: lista de archivos, estado vacío, y un botón **Agregar archivo** con 4 orígenes (Dispositivo, Cámara, Galería, Google Drive). Tocar un archivo abre sus detalles con **Renombrar** y **Eliminar**.
+
+Como pide esta etapa, todavía no hay subida real: Dispositivo/Cámara/Galería crean un registro mock con un nombre generado (ej. "Foto 2.jpg"), y `fileService.ts` deja comentado exactamente dónde se conectaría cada uno más adelante (`expo-image-picker`, `expo-document-picker`, Supabase Storage para los bytes reales).
+
+## Google Drive (mock)
+
+Desde "Agregar archivo", la opción **Google Drive** abre `/drive`: un conector mock con su propio estado de "no conectado" (botón Conectar) y, una vez conectado, un explorador de carpetas/archivos ficticios con selección múltiple e "Importar (n)". `driveService.ts` dejá documentado en comentarios el punto exacto de integración real (OAuth vía `expo-auth-session`, Drive API `files.list`/`files.get` en vez de los datos mock).
 
 ## Sesiones de estudio
 
@@ -160,9 +179,9 @@ Desde el Home de una materia, **Iniciar sesión** abre `/sesion/nueva`: elegís 
 4. ~~Sesiones de estudio (timer, pausas, resumen)~~ ✅
 5. ~~Materias (home de materia, accesos a contenidos/plan/archivos/parciales/flashcards/tests)~~ ✅
 6. ~~Contenidos jerárquicos (unidad → tema → subtema)~~ ✅
-7. Planificación por materia
-8. Archivos (biblioteca estilo Finder)
-9. Integración de Google Drive (mock)
+7. ~~Planificación por materia~~ ✅
+8. ~~Archivos (biblioteca estilo Finder)~~ ✅
+9. ~~Integración de Google Drive (mock)~~ ✅
 10. Banco de parciales
 11. Flashcards
 12. Tests

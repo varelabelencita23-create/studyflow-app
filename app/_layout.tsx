@@ -38,10 +38,14 @@ function RootNavigator() {
       <Stack.Screen name="design-system" options={{ presentation: 'card' }} />
       <Stack.Screen name="materia/[id]" options={{ presentation: 'card' }} />
       <Stack.Screen name="materia/[id]/contenidos" options={{ presentation: 'card' }} />
+      <Stack.Screen name="materia/[id]/plan" options={{ presentation: 'card' }} />
+      <Stack.Screen name="materia/[id]/archivos" options={{ presentation: 'card' }} />
+      <Stack.Screen name="materia/[id]/archivos/[category]" options={{ presentation: 'card' }} />
       <Stack.Screen name="sesion/nueva" options={{ presentation: 'card' }} />
       <Stack.Screen name="sesion/timer" options={{ presentation: 'card', gestureEnabled: false }} />
       <Stack.Screen name="sesion/resumen" options={{ presentation: 'card', gestureEnabled: false }} />
       <Stack.Screen name="sesion/[sessionId]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="drive" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

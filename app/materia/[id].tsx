@@ -148,6 +148,8 @@ export default function SubjectDetailScreen() {
             style={styles.accessCard}
             onPress={() => {
               if (item.key === 'contenidos') router.push(`/materia/${subject.id}/contenidos`);
+              else if (item.key === 'plan') router.push(`/materia/${subject.id}/plan`);
+              else if (item.key === 'archivos') router.push(`/materia/${subject.id}/archivos`);
               else show('Disponible en una próxima etapa', 'default');
             }}
           >
