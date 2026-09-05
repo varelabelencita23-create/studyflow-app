@@ -54,7 +54,9 @@ export default function NuevaSesionScreen() {
     }
     setSaving(true);
     try {
-      const topic = await contentService.add(subjectId, newTitle);
+      const units = await contentService.listUnits(subjectId);
+      const unit = units[0] ?? (await contentService.addUnit(subjectId, 'General'));
+      const topic = await contentService.addTopic(unit.id, subjectId, newTitle);
       setContents((current) => [...current, topic]);
       setSelectedIds((current) => [...current, topic.id]);
       setNewTitle('');

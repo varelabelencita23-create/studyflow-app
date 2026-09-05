@@ -1,5 +1,40 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapa completada: 6 — Contenidos jerárquicos
+
+### Funcionalidades implementadas
+
+- **Jerarquía real Unidad → Tema → Subtema** en `/materia/[id]/contenidos`, reemplazando el checklist plano de la Etapa 5: unidades expandibles/colapsables, cada una con sus temas, cada tema con sus subtemas si los tiene.
+- **Metadata por tema/subtema**: prioridad (baja/media/alta), dificultad (fácil/media/difícil), fecha objetivo (chips rápidos "Esta semana"/"Este mes"/"Sin fecha") e indicador de "importante para el parcial" — vía el nuevo `ContentMetaSheet`, compartido entre alta y edición de temas y subtemas. Solo se muestran como badges cuando son notables (prioridad alta, difícil, marcado o con fecha), para no saturar filas comunes.
+- **Progreso en cascada**: un tema sin subtemas se completa directo (tap); un tema con subtemas refleja el promedio de sus subtemas (ya no se tilda directo, se gestiona expandiéndolo); una unidad refleja el promedio de sus temas; y el progreso de la materia ahora es el **promedio de todos sus temas** (antes era completados/total) — mejora real, ya que ahora un tema puede tener progreso parcial (ej. 0.5) gracias a sus subtemas.
+- **Migración automática y transparente** de las materias creadas en la Etapa 5 (contenidos planos sin unidades): la primera vez que se abre la pantalla de Contenidos, se crea una unidad "General" con los temas ya existentes, sin perder su progreso.
+- CRUD completo en los tres niveles (crear/editar/eliminar unidad, tema y subtema), expandir/contraer con persistencia solo en memoria de qué está abierto (no necesita persistirse entre sesiones).
+
+### Archivos importantes creados
+
+- `src/components/content/ContentMetaSheet.tsx` — formulario compartido de alta/edición para temas y subtemas.
+- Reescrito por completo: `src/services/contentService.ts` (ahora maneja Unit/Topic/Subtopic con recálculo en cascada) y `app/materia/[id]/contenidos.tsx` (árbol expandible).
+- Modificado: `app/sesion/nueva.tsx` (el alta rápida de contenido ahora crea/usa una unidad antes de crear el tema, ya que `contentService.add(...)` dejó de existir).
+
+### Problemas encontrados y solucionados
+
+1. **Bug real en la migración**: la unidad "General" recién migrada se creaba con `progress: 0` sin recalcular a partir de los temas ya existentes de la Etapa 5 (que podían tener progreso real) — mostraba "0%" engañoso hasta que algo disparara un recálculo. Solución: llamar a `recomputeUnitFromTopics` inmediatamente después de crear la unidad migrada, antes de devolverla.
+2. **Bug real al crear un tema/subtema nuevo**: el formulario permitía elegir prioridad/dificultad/fecha/importancia antes de guardar, pero el alta (`addTopic`/`addSubtopic`) siempre creaba el registro con los valores por defecto, descartando en silencio lo que el usuario había elegido. Solución: después de crear, aplicar inmediatamente esos valores con `updateTopic`/`updateSubtopic`.
+3. **`contentService.add/update/remove/toggleComplete` (API plana de la Etapa 5) dejaron de existir** al pasar a la API jerárquica (`addTopic`/`addUnit`/etc). Se revisaron todos los call sites (`grep` de `contentService.` en toda la app): `listBySubject`, `recomputeSubjectProgress` y `applySessionOutcome` mantuvieron la misma firma (sin cambios en las pantallas de sesión), y solo `sesion/nueva.tsx` (alta rápida) y `contenidos.tsx` (reescrita) necesitaron actualizarse.
+4. **Acceso a `docs.expo.dev` sigue bloqueado** por el proxy de red del entorno (mismo problema documentado en etapas anteriores) — no fue necesario para este trabajo, que es lógica de dominio y no APIs de Expo, pero se deja registrado por la instrucción de `AGENTS.md`.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` → sin errores (no se agregaron rutas nuevas en esta etapa, no hizo falta regenerar tipos de router).
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso, antes y después de corregir los dos bugs.
+- Revisión manual del árbol completo: crear unidad → crear tema con subtemas → completar subtemas y verificar que el tema y la unidad reflejan el progreso promedio → verificar que el progreso de la materia se propaga a Materias, Home de materia y el planificador semanal; y por separado, abrir una materia con datos de la Etapa 5 (contenidos planos) y confirmar que aparecen correctamente bajo "General" con su progreso intacto.
+
+### Siguiente etapa
+
+**Etapa 7 — Planificación por materia**: pantalla para asignar contenidos pendientes a días específicos dentro de una materia (ej. "Subnetting → martes"), mostrando próximo parcial, progreso y objetivo. Reutilizará la jerarquía de contenidos ya construida en esta etapa.
+
+---
+
 ## Etapas completadas: 4 — Sesiones de estudio y 5 — Materias
 
 Se hicieron juntas a pedido del usuario, ya que están acopladas: las sesiones necesitan contenidos reales para poder "seleccionar contenidos estudiados", y el Home de materia de la Etapa 5 necesita sesiones reales para mostrar sus estadísticas.

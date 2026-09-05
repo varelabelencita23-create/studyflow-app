@@ -2,7 +2,7 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 5 — Materias** completada (incluye Etapa 4 — Sesiones de estudio). Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **Etapa 6 — Contenidos jerárquicos** completada. Frontend-only, sin backend todavía (mocks persistidos localmente).
 
 ## Stack
 
@@ -58,7 +58,7 @@ app/                        # Rutas (Expo Router)
   materia/
     [id].tsx                    # Home de la materia: progreso, stats, sesiones recientes, accesos
     [id]/
-      contenidos.tsx             # Checklist de contenidos (flat MVP) de esa materia
+      contenidos.tsx             # Árbol Unidad → Tema → Subtema (expandir/colapsar, CRUD, progreso en cascada)
   sesion/
     nueva.tsx                   # Setup: elegir contenidos a estudiar + objetivo
     timer.tsx                    # Timer con pausar/reanudar/finalizar
@@ -67,7 +67,7 @@ app/                        # Rutas (Expo Router)
 
 src/
   theme/          # Colores, tipografía, spacing, radios, sombras (design tokens)
-  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ (SubjectFormSheet)
+  components/     # SplashView + ui/ (librería reutilizable) + planner/ + subjects/ (SubjectFormSheet) + content/ (ContentMetaSheet)
   services/       # Capa mock (auth, materias, contenidos, sesiones, onboarding, plan semanal, storage)
   store/          # AppStateProvider (estado global) + ActiveSessionProvider (timer en curso)
   hooks/          # Hooks compartidos (ej. useToast)
@@ -130,7 +130,19 @@ La tab **Materias** tiene CRUD completo (agregar/editar/eliminar/reordenar) igua
 - Progreso general, próximo parcial (placeholder honesto hasta la Etapa 13 — no se inventan datos), días asignados esta semana, horas estudiadas, temas completados, cantidad de sesiones y promedio diario — todo calculado a partir de datos reales (contenidos y sesiones), no hardcodeado.
 - Botón **Iniciar sesión** (con guardia: si ya hay una sesión en curso en otra materia, te lleva a esa antes de perderla).
 - Últimas 3 sesiones, con acceso al detalle de cada una.
-- Grilla de accesos: **Contenidos** ya es real (checklist con progreso); Plan de estudio, Archivos, Parciales, Flashcards y Tests quedan como vista previa hasta sus propias etapas.
+- Grilla de accesos: **Contenidos** ya es real (árbol con progreso); Plan de estudio, Archivos, Parciales, Flashcards y Tests quedan como vista previa hasta sus propias etapas.
+
+## Contenidos (Unidad → Tema → Subtema)
+
+`/materia/[id]/contenidos` muestra la jerarquía real de la materia: **Unidades** expandibles, cada una con sus **Temas**, y cada tema con sus **Subtemas** si los tiene. Cada tema/subtema puede tener prioridad (baja/media/alta), dificultad (fácil/media/difícil), fecha objetivo y una marca de "importante para el parcial" — solo se muestran como badges cuando son notables (prioridad alta, difícil, marcado, o con fecha), para no saturar la lista en el caso común.
+
+El progreso se calcula en cascada, siempre de abajo hacia arriba:
+- Un **tema sin subtemas** se completa directamente (tap para tildar).
+- Un **tema con subtemas** refleja el promedio de sus subtemas — no se tilda directo, se expande para trabajar sus subtemas.
+- Una **unidad** refleja el promedio de sus temas.
+- El **progreso de la materia** (mostrado en Materias, el Home de materia y el planificador semanal) es el promedio de todos sus temas — ya no un simple conteo de completados/total, para reflejar mejor el progreso parcial que viene de subtemas.
+
+Las materias creadas en la Etapa 5 (contenidos planos, sin unidades) se migran automáticamente a una unidad "General" la primera vez que se abre esta pantalla, sin perder el progreso ya registrado.
 
 ## Sesiones de estudio
 
@@ -147,7 +159,7 @@ Desde el Home de una materia, **Iniciar sesión** abre `/sesion/nueva`: elegís 
 3. ~~Home / Planificador semanal (drag & drop de materias sobre los días)~~ ✅
 4. ~~Sesiones de estudio (timer, pausas, resumen)~~ ✅
 5. ~~Materias (home de materia, accesos a contenidos/plan/archivos/parciales/flashcards/tests)~~ ✅
-6. Contenidos jerárquicos (unidad → tema → subtema — hoy son un checklist plano, sin unidades/subtemas todavía)
+6. ~~Contenidos jerárquicos (unidad → tema → subtema)~~ ✅
 7. Planificación por materia
 8. Archivos (biblioteca estilo Finder)
 9. Integración de Google Drive (mock)
