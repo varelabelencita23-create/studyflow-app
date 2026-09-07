@@ -1,12 +1,5 @@
+import { supabase } from '@/lib/supabase';
 import { User } from '@/types';
-import { generateId } from '@/utils';
-import { mockNetworkDelay, STORAGE_KEYS, storage } from './storage';
-
-/**
- * Mock auth backed by local storage. Every method mirrors the shape a real
- * Supabase Auth call would have (async, throws on failure) so this file is
- * the only thing that needs to change when Supabase is introduced.
- */
 
 interface RegisterInput {
   fullName: string;
@@ -19,63 +12,105 @@ interface LoginInput {
   password: string;
 }
 
-function createUser(fullName: string, email: string): User {
-  const now = new Date().toISOString();
+interface ProfileRow {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  study_mode: User['studyMode'];
+  max_subjects_per_week: number;
+  onboarding_completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapProfile(row: ProfileRow): User {
   return {
-    id: generateId('user'),
-    fullName,
-    email: email.trim().toLowerCase(),
-    studyMode: 'standard',
-    maxSubjectsPerWeek: 3,
-    createdAt: now,
-    updatedAt: now,
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
+    avatarUrl: row.avatar_url ?? undefined,
+    studyMode: row.study_mode,
+    maxSubjectsPerWeek: row.max_subjects_per_week,
+    onboardingCompletedAt: row.onboarding_completed_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
+async function fetchProfile(userId: string): Promise<User> {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+  if (error) throw error;
+  return mapProfile(data as ProfileRow);
+}
+
 export const authService = {
+  /** Reads the session Supabase already restored from AsyncStorage on launch. */
   async getSession(): Promise<User | null> {
-    return storage.get<User>(STORAGE_KEYS.session);
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (!data.session) return null;
+    return fetchProfile(data.session.user.id);
   },
 
   async register({ fullName, email, password }: RegisterInput): Promise<User> {
-    await mockNetworkDelay();
-    if (password.length < 6) {
-      throw new Error('La contraseña debe tener al menos 6 caracteres.');
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: { data: { full_name: fullName.trim() } },
+    });
+    if (error) throw error;
+    if (!data.user) {
+      throw new Error('No se pudo crear la cuenta. Intentá de nuevo.');
     }
-    const user = createUser(fullName.trim(), email);
-    await storage.set(STORAGE_KEYS.session, user);
-    return user;
+    if (!data.session) {
+      // Email confirmation is required before a session exists.
+      throw new Error('Te enviamos un email de confirmación. Confirmá tu cuenta y volvé a iniciar sesión.');
+    }
+    // The `handle_new_user` trigger inserts the profiles row synchronously
+    // within the same signup transaction, so it's already there to read.
+    return fetchProfile(data.user.id);
   },
 
   async login({ email, password }: LoginInput): Promise<User> {
-    await mockNetworkDelay();
-    if (password.length < 6) {
-      throw new Error('Email o contraseña incorrectos.');
-    }
-    const existing = await storage.get<User>(STORAGE_KEYS.session);
-    const user = existing && existing.email === email.trim().toLowerCase()
-      ? existing
-      : createUser(email.split('@')[0], email);
-    await storage.set(STORAGE_KEYS.session, user);
-    return user;
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) throw error;
+    return fetchProfile(data.user.id);
   },
 
   async sendPasswordReset(email: string): Promise<void> {
-    await mockNetworkDelay();
-    if (!email.trim()) {
-      throw new Error('Ingresá un email válido.');
-    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+    if (error) throw error;
   },
 
-  async updateUser(patch: Partial<User>): Promise<User> {
-    const current = await storage.get<User>(STORAGE_KEYS.session);
-    if (!current) throw new Error('No hay una sesión activa.');
-    const updated: User = { ...current, ...patch, updatedAt: new Date().toISOString() };
-    await storage.set(STORAGE_KEYS.session, updated);
-    return updated;
+  async updateUser(patch: Partial<Pick<User, 'fullName' | 'email'>>): Promise<User> {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    const userId = sessionData.session?.user.id;
+    if (!userId) throw new Error('No hay una sesión activa.');
+
+    if (patch.email) {
+      const { error: authError } = await supabase.auth.updateUser({ email: patch.email.trim().toLowerCase() });
+      if (authError) throw authError;
+    }
+
+    const profilePatch: Partial<Pick<ProfileRow, 'full_name' | 'email'>> = {};
+    if (patch.fullName) profilePatch.full_name = patch.fullName.trim();
+    if (patch.email) profilePatch.email = patch.email.trim().toLowerCase();
+
+    if (Object.keys(profilePatch).length > 0) {
+      const { error } = await supabase.from('profiles').update(profilePatch).eq('id', userId);
+      if (error) throw error;
+    }
+
+    return fetchProfile(userId);
   },
 
   async logout(): Promise<void> {
-    await storage.remove(STORAGE_KEYS.session);
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
   },
 };

@@ -1,4 +1,5 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import {
   authService,
   DEFAULT_STUDY_MODE_CONFIG,
@@ -29,6 +30,7 @@ interface AppStateContextValue {
   register: (fullName: string, email: string, password: string) => Promise<User>;
   sendPasswordReset: (email: string) => Promise<void>;
   updateUser: (patch: Partial<Pick<User, 'fullName' | 'email'>>) => Promise<User>;
+  logout: () => Promise<void>;
 
   addSubject: (input: SubjectInput) => Promise<Subject>;
   updateSubject: (id: string, patch: Partial<SubjectInput>) => Promise<void>;
@@ -58,46 +60,94 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [weekStartDate] = useState(() => getWeekStartISO());
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan | null>(null);
 
+  const weekStartDateRef = useRef(weekStartDate);
+  weekStartDateRef.current = weekStartDate;
+
+  /** Populates subjects/onboarding/weekly-plan for a just-known-signed-in user. */
+  const loadForUser = useCallback(async (sessionUser: User) => {
+    const [subjectList, modeConfig, completed] = await Promise.all([
+      subjectsService.list(),
+      onboardingService.getStudyModeConfig(),
+      onboardingService.isCompleted(),
+    ]);
+    setSubjects(subjectList);
+    setStudyModeConfigState(modeConfig);
+    setOnboardingCompleted(completed);
+
+    if (completed) {
+      const plan = await weeklyPlanService.getOrCreate(
+        weekStartDateRef.current,
+        sessionUser.id,
+        subjectList.map((subject) => subject.id),
+        modeConfig.maxSubjectsPerWeek,
+      );
+      setWeeklyPlan(plan);
+    } else {
+      setWeeklyPlan(null);
+    }
+  }, []);
+
+  const clearForSignedOut = useCallback(() => {
+    setSubjects([]);
+    setStudyModeConfigState(DEFAULT_STUDY_MODE_CONFIG);
+    setOnboardingCompleted(false);
+    setWeeklyPlan(null);
+  }, []);
+
   useEffect(() => {
+    let active = true;
+
     (async () => {
-      const [session, subjectList, modeConfig, completed] = await Promise.all([
-        authService.getSession(),
-        subjectsService.list(),
-        onboardingService.getStudyModeConfig(),
-        onboardingService.isCompleted(),
-      ]);
+      const session = await authService.getSession();
+      if (!active) return;
       setUser(session);
-      setSubjects(subjectList);
-      setStudyModeConfigState(modeConfig);
-      setOnboardingCompleted(completed);
-
-      if (completed) {
-        const plan = await weeklyPlanService.getOrCreate(
-          weekStartDate,
-          session?.id ?? 'guest',
-          subjectList.map((subject) => subject.id),
-          modeConfig.maxSubjectsPerWeek,
-        );
-        setWeeklyPlan(plan);
-      }
-
-      setIsLoading(false);
+      if (session) await loadForUser(session);
+      if (active) setIsLoading(false);
     })();
-  }, [weekStartDate]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const loggedInUser = await authService.login({ email, password });
-    setUser(loggedInUser);
-    return loggedInUser;
-  }, []);
+    // Reacts to sign-out triggered from anywhere (this screen, token expiry,
+    // another tab) so the app never shows stale data for a session that's
+    // no longer valid — this is what actually protects routes, not the
+    // one-time check above.
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        clearForSignedOut();
+      }
+    });
 
-  const register = useCallback(async (fullName: string, email: string, password: string) => {
-    const newUser = await authService.register({ fullName, email, password });
-    setUser(newUser);
-    return newUser;
-  }, []);
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, [loadForUser, clearForSignedOut]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const loggedInUser = await authService.login({ email, password });
+      setUser(loggedInUser);
+      await loadForUser(loggedInUser);
+      return loggedInUser;
+    },
+    [loadForUser],
+  );
+
+  const register = useCallback(
+    async (fullName: string, email: string, password: string) => {
+      const newUser = await authService.register({ fullName, email, password });
+      setUser(newUser);
+      await loadForUser(newUser);
+      return newUser;
+    },
+    [loadForUser],
+  );
 
   const sendPasswordReset = useCallback((email: string) => authService.sendPasswordReset(email), []);
+
+  const logout = useCallback(async () => {
+    await authService.logout();
+    // state cleanup happens via the onAuthStateChange listener above
+  }, []);
 
   const updateUser = useCallback(async (patch: Partial<Pick<User, 'fullName' | 'email'>>) => {
     const updated = await authService.updateUser(patch);
@@ -107,7 +157,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const addSubject = useCallback(
     async (input: SubjectInput) => {
-      const subject = await subjectsService.add(input, user?.id ?? 'guest');
+      if (!user) throw new Error('No hay una sesión activa.');
+      const subject = await subjectsService.add(input, user.id);
       setSubjects((current) => [...current, subject]);
       return subject;
     },
@@ -135,10 +186,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeOnboarding = useCallback(async () => {
+    if (!user) throw new Error('No hay una sesión activa.');
     await onboardingService.complete();
     const plan = await weeklyPlanService.getOrCreate(
       weekStartDate,
-      user?.id ?? 'guest',
+      user.id,
       subjects.map((subject) => subject.id),
       studyModeConfig.maxSubjectsPerWeek,
     );
@@ -148,18 +200,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const resetOnboarding = useCallback(async () => {
     await onboardingService.reset();
-    setUser(null);
-    setSubjects([]);
-    setStudyModeConfigState(DEFAULT_STUDY_MODE_CONFIG);
-    setOnboardingCompleted(false);
-    setWeeklyPlan(null);
+    // state cleanup happens via the onAuthStateChange listener above
   }, []);
 
   const ensurePlan = useCallback(async () => {
     if (weeklyPlan) return weeklyPlan;
+    if (!user) throw new Error('No hay una sesión activa.');
     const plan = await weeklyPlanService.getOrCreate(
       weekStartDate,
-      user?.id ?? 'guest',
+      user.id,
       subjects.map((subject) => subject.id),
       studyModeConfig.maxSubjectsPerWeek,
     );
@@ -211,6 +260,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       register,
       sendPasswordReset,
       updateUser,
+      logout,
       addSubject,
       updateSubject,
       removeSubject,
@@ -235,6 +285,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       register,
       sendPasswordReset,
       updateUser,
+      logout,
       addSubject,
       updateSubject,
       removeSubject,

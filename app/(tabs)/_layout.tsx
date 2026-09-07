@@ -19,9 +19,9 @@ const TAB_ICONS: Record<string, TabIconConfig> = {
 };
 
 export default function TabsLayout() {
-  const { onboardingCompleted } = useAppState();
+  const { user, onboardingCompleted } = useAppState();
 
-  if (!onboardingCompleted) {
+  if (!user || !onboardingCompleted) {
     return <Redirect href="/welcome" />;
   }
 

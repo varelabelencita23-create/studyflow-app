@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
- * Thin JSON wrapper around AsyncStorage. Every mock service reads/writes
- * through here so that swapping local persistence for Supabase later only
- * touches this file's call sites, not the UI.
+ * Thin JSON wrapper around AsyncStorage. All persistent app data lives in
+ * Supabase now — this is only for local, per-device cache/ephemeral state
+ * (e.g. recovering an in-progress study timer if the app gets killed), never
+ * a source of truth for anything a user creates.
  */
 export const storage = {
   async get<T>(key: string): Promise<T | null> {
@@ -16,37 +17,9 @@ export const storage = {
   async remove(key: string): Promise<void> {
     await AsyncStorage.removeItem(key);
   },
-  async multiRemove(keys: string[]): Promise<void> {
-    await AsyncStorage.multiRemove(keys);
-  },
 };
 
 export const STORAGE_KEYS = {
-  session: 'studyflow/session',
-  subjects: 'studyflow/subjects',
-  studyModeConfig: 'studyflow/study-mode-config',
-  onboardingCompleted: 'studyflow/onboarding-completed',
-  weeklyPlanPrefix: 'studyflow/weekly-plan/',
-  units: 'studyflow/units',
-  topics: 'studyflow/topics',
-  subtopics: 'studyflow/subtopics',
-  sessions: 'studyflow/sessions',
-  contentPlan: 'studyflow/content-plan',
-  studyMaterials: 'studyflow/study-materials',
-  driveConnected: 'studyflow/drive-connected',
-  exams: 'studyflow/exams',
-  flashcardDecks: 'studyflow/flashcard-decks',
-  flashcards: 'studyflow/flashcards',
-  quizzes: 'studyflow/quizzes',
-  quizQuestions: 'studyflow/quiz-questions',
-  quizAttempts: 'studyflow/quiz-attempts',
-  preferences: 'studyflow/preferences',
-  achievements: 'studyflow/achievements',
+  /** Snapshot of an in-progress study session timer, so it survives the app being killed mid-session. */
+  activeSessionCache: 'studyflow/active-session-cache',
 } as const;
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Simulates network latency for mock service calls. */
-export const mockNetworkDelay = () => delay(600);

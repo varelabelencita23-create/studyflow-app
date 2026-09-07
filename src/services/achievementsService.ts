@@ -1,8 +1,8 @@
+import { getCurrentUserId, supabase } from '@/lib/supabase';
 import { Achievement, AchievementKind, Subject, WeeklyPlan } from '@/types';
 import { addDaysToISODate, getTodayWeekDayIndex, WEEK_DAYS } from '@/utils';
 import { sessionService } from './sessionService';
 import { statsService } from './statsService';
-import { STORAGE_KEYS, storage } from './storage';
 
 interface UnlockedRecord {
   kind: AchievementKind;
@@ -20,11 +20,12 @@ const DEFINITIONS: Record<AchievementKind, { title: string; description: string 
 const ALL_KINDS = Object.keys(DEFINITIONS) as AchievementKind[];
 
 async function readUnlocked(): Promise<UnlockedRecord[]> {
-  return (await storage.get<UnlockedRecord[]>(STORAGE_KEYS.achievements)) ?? [];
-}
-
-async function writeUnlocked(records: UnlockedRecord[]): Promise<void> {
-  await storage.set(STORAGE_KEYS.achievements, records);
+  const { data, error } = await supabase.from('user_achievements').select('kind, unlocked_at');
+  if (error) throw error;
+  return (data as { kind: AchievementKind; unlocked_at: string }[]).map((row) => ({
+    kind: row.kind,
+    unlockedAt: row.unlocked_at,
+  }));
 }
 
 /**
@@ -74,15 +75,20 @@ async function evaluateAndUnlock(params: { subjects: Subject[]; weeklyPlan: Week
   };
 
   const now = new Date().toISOString();
-  const newlyUnlocked = ALL_KINDS.filter((kind) => met[kind] && !unlockedKinds.has(kind)).map((kind) => ({
-    kind,
-    unlockedAt: now,
-  }));
+  const newlyUnlockedKinds = ALL_KINDS.filter((kind) => met[kind] && !unlockedKinds.has(kind));
 
-  const allUnlocked = newlyUnlocked.length > 0 ? [...unlocked, ...newlyUnlocked] : unlocked;
-  if (newlyUnlocked.length > 0) {
-    await writeUnlocked(allUnlocked);
+  if (newlyUnlockedKinds.length > 0) {
+    const userId = await getCurrentUserId();
+    const { error } = await supabase
+      .from('user_achievements')
+      .insert(newlyUnlockedKinds.map((kind) => ({ user_id: userId, kind, unlocked_at: now })));
+    if (error) throw error;
   }
+
+  const allUnlocked =
+    newlyUnlockedKinds.length > 0
+      ? [...unlocked, ...newlyUnlockedKinds.map((kind) => ({ kind, unlockedAt: now }))]
+      : unlocked;
 
   return ALL_KINDS.map((kind) => {
     const record = allUnlocked.find((item) => item.kind === kind);

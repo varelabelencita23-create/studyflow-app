@@ -1,5 +1,7 @@
-import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { contentService, sessionService } from '@/services';
+import { STORAGE_KEYS, storage } from '@/services/storage';
 import { ID } from '@/types';
 import { useAppState } from './AppStateProvider';
 
@@ -45,6 +47,47 @@ export function getElapsedMs(session: ActiveSession): number {
 export function ActiveSessionProvider({ children }: { children: ReactNode }) {
   const { subjects, refreshSubjects } = useAppState();
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const activeSessionRef = useRef(activeSession);
+  activeSessionRef.current = activeSession;
+
+  // Recovers a session interrupted by the app being killed. It always comes
+  // back paused (never silently counting time the app was closed as active
+  // study time) — the learner has to explicitly resume it themselves.
+  useEffect(() => {
+    storage.get<ActiveSession>(STORAGE_KEYS.activeSessionCache).then((cached) => {
+      if (cached) setActiveSession({ ...cached, isRunning: false, lastResumeAt: Date.now() });
+    });
+  }, []);
+
+  // Keeps a local snapshot on every change so a killed app has something to
+  // recover on next launch — this is a cache of in-progress state, not the
+  // source of truth (the finished session is only real once `finalize` below
+  // writes it to Supabase).
+  useEffect(() => {
+    if (activeSession) {
+      storage.set(STORAGE_KEYS.activeSessionCache, activeSession);
+    } else {
+      storage.remove(STORAGE_KEYS.activeSessionCache);
+    }
+  }, [activeSession]);
+
+  // Freezes the running timer into the snapshot the moment the app
+  // backgrounds, so time spent fully closed is never counted as active study
+  // time when it's recovered on relaunch.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') return;
+      const current = activeSessionRef.current;
+      if (current?.isRunning) {
+        storage.set(STORAGE_KEYS.activeSessionCache, {
+          ...current,
+          isRunning: false,
+          accumulatedMs: getElapsedMs(current),
+        });
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   const startSession = useCallback(
     (subjectId: ID, subjectName: string, contentIds: ID[], goalMinutes: number | null) => {

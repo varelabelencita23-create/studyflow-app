@@ -1,38 +1,101 @@
+import { getCurrentUserId, supabase } from '@/lib/supabase';
 import { ContentStatus, Difficulty, ID, ISODateString, Priority, Subtopic, Topic, Unit } from '@/types';
-import { generateId } from '@/utils';
-import { STORAGE_KEYS, storage } from './storage';
 import { subjectsService } from './subjectsService';
 
 /**
- * Hierarchical content: Subject -> Unit -> Topic -> Subtopic. Each level is
- * stored as its own flat array (parent reference on the child, e.g.
- * `topic.unitId`) rather than keeping parent-side id arrays as the source of
- * truth — that avoids a two-way sync between parent/child records. The
- * `topicIds`/`subtopicIds` fields on Unit/Topic are still populated on every
- * read (derived from the children), only to satisfy the public type shape.
+ * Hierarchical content: Subject -> Unit -> Topic -> Subtopic, each its own
+ * table with a parent foreign key. `topicIds`/`subtopicIds` on Unit/Topic are
+ * never stored — they're derived on every read via a query against the
+ * child table, so there's no parent/child array to keep in sync.
  */
 
-function defaultUnitId(subjectId: ID): ID {
-  return `unit_default_${subjectId}`;
+interface ContentRow {
+  id: string;
+  subject_id: string;
+  title: string;
+  status: ContentStatus;
+  progress: number;
+  minutes_studied: number;
+  last_session_at: string | null;
+  priority: Priority;
+  difficulty: Difficulty;
+  target_date: string | null;
+  important_for_exam: boolean;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
 }
 
-async function readUnits(): Promise<Unit[]> {
-  return (await storage.get<Unit[]>(STORAGE_KEYS.units)) ?? [];
+interface UnitRow extends ContentRow {}
+interface TopicRow extends ContentRow {
+  unit_id: string;
 }
-async function writeUnits(units: Unit[]): Promise<void> {
-  await storage.set(STORAGE_KEYS.units, units);
+interface SubtopicRow extends ContentRow {
+  topic_id: string;
 }
-async function readTopics(): Promise<Topic[]> {
-  return (await storage.get<Topic[]>(STORAGE_KEYS.topics)) ?? [];
+
+function mapUnit(row: UnitRow, topicIds: ID[]): Unit {
+  return {
+    type: 'unit',
+    id: row.id,
+    subjectId: row.subject_id,
+    title: row.title,
+    status: row.status,
+    progress: row.progress,
+    minutesStudied: row.minutes_studied,
+    lastSessionAt: row.last_session_at ?? undefined,
+    priority: row.priority,
+    difficulty: row.difficulty,
+    targetDate: row.target_date ?? undefined,
+    importantForExam: row.important_for_exam,
+    order: row.order_index,
+    topicIds,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
-async function writeTopics(topics: Topic[]): Promise<void> {
-  await storage.set(STORAGE_KEYS.topics, topics);
+
+function mapTopic(row: TopicRow, subtopicIds: ID[]): Topic {
+  return {
+    type: 'topic',
+    id: row.id,
+    subjectId: row.subject_id,
+    unitId: row.unit_id,
+    title: row.title,
+    status: row.status,
+    progress: row.progress,
+    minutesStudied: row.minutes_studied,
+    lastSessionAt: row.last_session_at ?? undefined,
+    priority: row.priority,
+    difficulty: row.difficulty,
+    targetDate: row.target_date ?? undefined,
+    importantForExam: row.important_for_exam,
+    order: row.order_index,
+    subtopicIds,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
-async function readSubtopics(): Promise<Subtopic[]> {
-  return (await storage.get<Subtopic[]>(STORAGE_KEYS.subtopics)) ?? [];
-}
-async function writeSubtopics(subtopics: Subtopic[]): Promise<void> {
-  await storage.set(STORAGE_KEYS.subtopics, subtopics);
+
+function mapSubtopic(row: SubtopicRow): Subtopic {
+  return {
+    type: 'subtopic',
+    id: row.id,
+    subjectId: row.subject_id,
+    topicId: row.topic_id,
+    title: row.title,
+    status: row.status,
+    progress: row.progress,
+    minutesStudied: row.minutes_studied,
+    lastSessionAt: row.last_session_at ?? undefined,
+    priority: row.priority,
+    difficulty: row.difficulty,
+    targetDate: row.target_date ?? undefined,
+    importantForExam: row.important_for_exam,
+    order: row.order_index,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function statusFromProgress(progress: number): ContentStatus {
@@ -41,104 +104,90 @@ function statusFromProgress(progress: number): ContentStatus {
   return 'not-started';
 }
 
-/** Lists a subject's units, auto-migrating Stage 5's flat topics (attached to a placeholder unit) into a real "General" unit the first time they're read. */
+async function readSubtopicRows(topicId: ID): Promise<SubtopicRow[]> {
+  const { data, error } = await supabase
+    .from('subtopics')
+    .select('*')
+    .eq('topic_id', topicId)
+    .order('order_index', { ascending: true });
+  if (error) throw error;
+  return data as SubtopicRow[];
+}
+
+async function readTopicRows(unitId: ID): Promise<TopicRow[]> {
+  const { data, error } = await supabase
+    .from('topics')
+    .select('*')
+    .eq('unit_id', unitId)
+    .order('order_index', { ascending: true });
+  if (error) throw error;
+  return data as TopicRow[];
+}
+
 async function listUnits(subjectId: ID): Promise<Unit[]> {
-  const units = await readUnits();
-  let subjectUnits = units.filter((unit) => unit.subjectId === subjectId).sort((a, b) => a.order - b.order);
-
-  if (subjectUnits.length === 0) {
-    const topics = await readTopics();
-    const hasLegacyTopics = topics.some((topic) => topic.subjectId === subjectId);
-    if (hasLegacyTopics) {
-      const now = new Date().toISOString();
-      const generalUnit: Unit = {
-        id: defaultUnitId(subjectId),
-        type: 'unit',
-        subjectId,
-        title: 'General',
-        topicIds: [],
-        status: 'not-started',
-        progress: 0,
-        minutesStudied: 0,
-        priority: 'medium',
-        difficulty: 'medium',
-        importantForExam: false,
-        order: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await writeUnits([...units, generalUnit]);
-      // Legacy topics may already carry progress from before Stage 6 — seed
-      // the new unit's progress from them instead of leaving it at 0.
-      await recomputeUnitFromTopics(generalUnit.id);
-      subjectUnits = (await readUnits()).filter((unit) => unit.id === generalUnit.id);
-    }
-  }
-
-  const topics = await readTopics();
-  return subjectUnits.map((unit) => ({
-    ...unit,
-    topicIds: topics.filter((topic) => topic.unitId === unit.id).map((topic) => topic.id),
-  }));
+  const { data, error } = await supabase
+    .from('units')
+    .select('*, topics(id)')
+    .eq('subject_id', subjectId)
+    .order('order_index', { ascending: true });
+  if (error) throw error;
+  return (data as (UnitRow & { topics: { id: string }[] })[]).map((row) =>
+    mapUnit(row, row.topics.map((topic) => topic.id)),
+  );
 }
 
 async function addUnit(subjectId: ID, title: string): Promise<Unit> {
-  const units = await readUnits();
-  const order = units.filter((unit) => unit.subjectId === subjectId).length;
-  const now = new Date().toISOString();
-  const unit: Unit = {
-    id: generateId('unit'),
-    type: 'unit',
-    subjectId,
-    title: title.trim(),
-    topicIds: [],
-    status: 'not-started',
-    progress: 0,
-    minutesStudied: 0,
-    priority: 'medium',
-    difficulty: 'medium',
-    importantForExam: false,
-    order,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await writeUnits([...units, unit]);
-  return unit;
+  const userId = await getCurrentUserId();
+  const { count } = await supabase
+    .from('units')
+    .select('id', { count: 'exact', head: true })
+    .eq('subject_id', subjectId);
+  const { data, error } = await supabase
+    .from('units')
+    .insert({ user_id: userId, subject_id: subjectId, title: title.trim(), order_index: count ?? 0 })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapUnit(data as UnitRow, []);
 }
 
 async function updateUnit(id: ID, subjectId: ID, patch: { title?: string }): Promise<Unit[]> {
-  const units = await readUnits();
-  const next = units.map((unit) =>
-    unit.id === id ? { ...unit, title: patch.title?.trim() ?? unit.title, updatedAt: new Date().toISOString() } : unit,
-  );
-  await writeUnits(next);
+  if (patch.title !== undefined) {
+    const { error } = await supabase.from('units').update({ title: patch.title.trim() }).eq('id', id);
+    if (error) throw error;
+  }
   return listUnits(subjectId);
 }
 
 async function removeUnit(id: ID, subjectId: ID): Promise<Unit[]> {
-  const [units, topics, subtopics] = await Promise.all([readUnits(), readTopics(), readSubtopics()]);
-  const removedTopicIds = topics.filter((topic) => topic.unitId === id).map((topic) => topic.id);
-  await writeUnits(units.filter((unit) => unit.id !== id));
-  await writeTopics(topics.filter((topic) => topic.unitId !== id));
-  await writeSubtopics(subtopics.filter((subtopic) => !removedTopicIds.includes(subtopic.topicId)));
+  const { error } = await supabase.from('units').delete().eq('id', id);
+  if (error) throw error;
   await recomputeSubjectProgress(subjectId);
   return listUnits(subjectId);
 }
 
 async function listTopicsByUnit(unitId: ID): Promise<Topic[]> {
-  const topics = await readTopics();
-  return topics
-    .filter((topic) => topic.unitId === unitId)
-    .map((topic) => topic)
-    .sort((a, b) => a.order - b.order);
+  const { data, error } = await supabase
+    .from('topics')
+    .select('*, subtopics(id)')
+    .eq('unit_id', unitId)
+    .order('order_index', { ascending: true });
+  if (error) throw error;
+  return (data as (TopicRow & { subtopics: { id: string }[] })[]).map((row) =>
+    mapTopic(row, row.subtopics.map((subtopic) => subtopic.id)),
+  );
 }
 
 /** Flat list of every topic for a subject, ordered by unit order then topic order — used by session setup and subject-level stats. */
 async function listBySubject(subjectId: ID): Promise<Topic[]> {
   const units = await listUnits(subjectId);
   const unitOrderIndex = new Map(units.map((unit, index) => [unit.id, index]));
-  const topics = (await readTopics()).filter((topic) => topic.subjectId === subjectId);
-  return [...topics].sort((a, b) => {
+  const { data, error } = await supabase.from('topics').select('*, subtopics(id)').eq('subject_id', subjectId);
+  if (error) throw error;
+  const topics = (data as (TopicRow & { subtopics: { id: string }[] })[]).map((row) =>
+    mapTopic(row, row.subtopics.map((subtopic) => subtopic.id)),
+  );
+  return topics.sort((a, b) => {
     const unitOrderA = unitOrderIndex.get(a.unitId) ?? 999;
     const unitOrderB = unitOrderIndex.get(b.unitId) ?? 999;
     return unitOrderA !== unitOrderB ? unitOrderA - unitOrderB : a.order - b.order;
@@ -146,28 +195,21 @@ async function listBySubject(subjectId: ID): Promise<Topic[]> {
 }
 
 async function addTopic(unitId: ID, subjectId: ID, title: string): Promise<Topic> {
-  const topics = await readTopics();
-  const order = topics.filter((topic) => topic.unitId === unitId).length;
-  const now = new Date().toISOString();
-  const topic: Topic = {
-    id: generateId('topic'),
-    type: 'topic',
-    subjectId,
-    unitId,
-    subtopicIds: [],
-    title: title.trim(),
-    status: 'not-started',
-    progress: 0,
-    minutesStudied: 0,
-    priority: 'medium',
-    difficulty: 'medium',
-    importantForExam: false,
-    order,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await writeTopics([...topics, topic]);
-  return topic;
+  const userId = await getCurrentUserId();
+  const { count } = await supabase.from('topics').select('id', { count: 'exact', head: true }).eq('unit_id', unitId);
+  const { data, error } = await supabase
+    .from('topics')
+    .insert({
+      user_id: userId,
+      subject_id: subjectId,
+      unit_id: unitId,
+      title: title.trim(),
+      order_index: count ?? 0,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapTopic(data as TopicRow, []);
 }
 
 interface TopicPatch {
@@ -179,28 +221,21 @@ interface TopicPatch {
 }
 
 async function updateTopic(id: ID, unitId: ID, patch: TopicPatch): Promise<Topic[]> {
-  const topics = await readTopics();
-  const next = topics.map((topic) =>
-    topic.id === id
-      ? {
-          ...topic,
-          title: patch.title?.trim() ?? topic.title,
-          priority: patch.priority ?? topic.priority,
-          difficulty: patch.difficulty ?? topic.difficulty,
-          targetDate: patch.targetDate === null ? undefined : patch.targetDate ?? topic.targetDate,
-          importantForExam: patch.importantForExam ?? topic.importantForExam,
-          updatedAt: new Date().toISOString(),
-        }
-      : topic,
-  );
-  await writeTopics(next);
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.title !== undefined) dbPatch.title = patch.title.trim();
+  if (patch.priority !== undefined) dbPatch.priority = patch.priority;
+  if (patch.difficulty !== undefined) dbPatch.difficulty = patch.difficulty;
+  if (patch.targetDate !== undefined) dbPatch.target_date = patch.targetDate;
+  if (patch.importantForExam !== undefined) dbPatch.important_for_exam = patch.importantForExam;
+
+  const { error } = await supabase.from('topics').update(dbPatch).eq('id', id);
+  if (error) throw error;
   return listTopicsByUnit(unitId);
 }
 
 async function removeTopic(id: ID, unitId: ID, subjectId: ID): Promise<Topic[]> {
-  const [topics, subtopics] = await Promise.all([readTopics(), readSubtopics()]);
-  await writeTopics(topics.filter((topic) => topic.id !== id));
-  await writeSubtopics(subtopics.filter((subtopic) => subtopic.topicId !== id));
+  const { error } = await supabase.from('topics').delete().eq('id', id);
+  if (error) throw error;
   await recomputeUnitFromTopics(unitId);
   await recomputeSubjectProgress(subjectId);
   return listTopicsByUnit(unitId);
@@ -208,56 +243,52 @@ async function removeTopic(id: ID, unitId: ID, subjectId: ID): Promise<Topic[]> 
 
 /** Only meaningful for a leaf topic (no subtopics yet) — a topic with subtopics reflects their completion instead. */
 async function toggleTopicComplete(id: ID, unitId: ID, subjectId: ID): Promise<Topic[]> {
-  const topics = await readTopics();
-  const next = topics.map((topic) => {
-    if (topic.id !== id) return topic;
-    const completed = topic.status === 'completed';
-    return {
-      ...topic,
-      status: completed ? ('not-started' as const) : ('completed' as const),
-      progress: completed ? 0 : 1,
-      updatedAt: new Date().toISOString(),
-    };
-  });
-  await writeTopics(next);
+  const { data: current, error: readError } = await supabase.from('topics').select('status').eq('id', id).single();
+  if (readError) throw readError;
+  const completed = current.status === 'completed';
+
+  const { error } = await supabase
+    .from('topics')
+    .update({ status: completed ? 'not-started' : 'completed', progress: completed ? 0 : 1 })
+    .eq('id', id);
+  if (error) throw error;
+
   await recomputeUnitFromTopics(unitId);
   await recomputeSubjectProgress(subjectId);
   return listTopicsByUnit(unitId);
 }
 
 async function listSubtopicsByTopic(topicId: ID): Promise<Subtopic[]> {
-  const subtopics = await readSubtopics();
-  return subtopics.filter((subtopic) => subtopic.topicId === topicId).sort((a, b) => a.order - b.order);
+  const rows = await readSubtopicRows(topicId);
+  return rows.map(mapSubtopic);
 }
 
 async function listAllSubtopicsForSubject(subjectId: ID): Promise<Subtopic[]> {
-  const subtopics = await readSubtopics();
-  return subtopics.filter((subtopic) => subtopic.subjectId === subjectId);
+  const { data, error } = await supabase.from('subtopics').select('*').eq('subject_id', subjectId);
+  if (error) throw error;
+  return (data as SubtopicRow[]).map(mapSubtopic);
 }
 
 async function addSubtopic(topicId: ID, subjectId: ID, title: string): Promise<Subtopic> {
-  const subtopics = await readSubtopics();
-  const order = subtopics.filter((subtopic) => subtopic.topicId === topicId).length;
-  const now = new Date().toISOString();
-  const subtopic: Subtopic = {
-    id: generateId('subtopic'),
-    type: 'subtopic',
-    subjectId,
-    topicId,
-    title: title.trim(),
-    status: 'not-started',
-    progress: 0,
-    minutesStudied: 0,
-    priority: 'medium',
-    difficulty: 'medium',
-    importantForExam: false,
-    order,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await writeSubtopics([...subtopics, subtopic]);
+  const userId = await getCurrentUserId();
+  const { count } = await supabase
+    .from('subtopics')
+    .select('id', { count: 'exact', head: true })
+    .eq('topic_id', topicId);
+  const { data, error } = await supabase
+    .from('subtopics')
+    .insert({
+      user_id: userId,
+      subject_id: subjectId,
+      topic_id: topicId,
+      title: title.trim(),
+      order_index: count ?? 0,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
   await recomputeTopicFromSubtopics(topicId);
-  return subtopic;
+  return mapSubtopic(data as SubtopicRow);
 }
 
 interface SubtopicPatch {
@@ -268,26 +299,20 @@ interface SubtopicPatch {
 }
 
 async function updateSubtopic(id: ID, topicId: ID, patch: SubtopicPatch): Promise<Subtopic[]> {
-  const subtopics = await readSubtopics();
-  const next = subtopics.map((subtopic) =>
-    subtopic.id === id
-      ? {
-          ...subtopic,
-          title: patch.title?.trim() ?? subtopic.title,
-          priority: patch.priority ?? subtopic.priority,
-          difficulty: patch.difficulty ?? subtopic.difficulty,
-          importantForExam: patch.importantForExam ?? subtopic.importantForExam,
-          updatedAt: new Date().toISOString(),
-        }
-      : subtopic,
-  );
-  await writeSubtopics(next);
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.title !== undefined) dbPatch.title = patch.title.trim();
+  if (patch.priority !== undefined) dbPatch.priority = patch.priority;
+  if (patch.difficulty !== undefined) dbPatch.difficulty = patch.difficulty;
+  if (patch.importantForExam !== undefined) dbPatch.important_for_exam = patch.importantForExam;
+
+  const { error } = await supabase.from('subtopics').update(dbPatch).eq('id', id);
+  if (error) throw error;
   return listSubtopicsByTopic(topicId);
 }
 
 async function removeSubtopic(id: ID, topicId: ID, unitId: ID, subjectId: ID): Promise<Subtopic[]> {
-  const subtopics = await readSubtopics();
-  await writeSubtopics(subtopics.filter((subtopic) => subtopic.id !== id));
+  const { error } = await supabase.from('subtopics').delete().eq('id', id);
+  if (error) throw error;
   await recomputeTopicFromSubtopics(topicId);
   await recomputeUnitFromTopics(unitId);
   await recomputeSubjectProgress(subjectId);
@@ -295,18 +320,20 @@ async function removeSubtopic(id: ID, topicId: ID, unitId: ID, subjectId: ID): P
 }
 
 async function toggleSubtopicComplete(id: ID, topicId: ID, unitId: ID, subjectId: ID): Promise<Subtopic[]> {
-  const subtopics = await readSubtopics();
-  const next = subtopics.map((subtopic) => {
-    if (subtopic.id !== id) return subtopic;
-    const completed = subtopic.status === 'completed';
-    return {
-      ...subtopic,
-      status: completed ? ('not-started' as const) : ('completed' as const),
-      progress: completed ? 0 : 1,
-      updatedAt: new Date().toISOString(),
-    };
-  });
-  await writeSubtopics(next);
+  const { data: current, error: readError } = await supabase
+    .from('subtopics')
+    .select('status')
+    .eq('id', id)
+    .single();
+  if (readError) throw readError;
+  const completed = current.status === 'completed';
+
+  const { error } = await supabase
+    .from('subtopics')
+    .update({ status: completed ? 'not-started' : 'completed', progress: completed ? 0 : 1 })
+    .eq('id', id);
+  if (error) throw error;
+
   await recomputeTopicFromSubtopics(topicId);
   await recomputeUnitFromTopics(unitId);
   await recomputeSubjectProgress(subjectId);
@@ -315,29 +342,25 @@ async function toggleSubtopicComplete(id: ID, topicId: ID, unitId: ID, subjectId
 
 /** A topic with no subtopics manages its own status directly and is left untouched here. */
 async function recomputeTopicFromSubtopics(topicId: ID): Promise<void> {
-  const [topics, subtopics] = await Promise.all([readTopics(), readSubtopics()]);
-  const children = subtopics.filter((subtopic) => subtopic.topicId === topicId);
+  const children = await readSubtopicRows(topicId);
   if (children.length === 0) return;
   const progress = children.reduce((sum, subtopic) => sum + subtopic.progress, 0) / children.length;
-  const next = topics.map((topic) =>
-    topic.id === topicId
-      ? { ...topic, progress, status: statusFromProgress(progress), updatedAt: new Date().toISOString() }
-      : topic,
-  );
-  await writeTopics(next);
+  const { error } = await supabase
+    .from('topics')
+    .update({ progress, status: statusFromProgress(progress) })
+    .eq('id', topicId);
+  if (error) throw error;
 }
 
 async function recomputeUnitFromTopics(unitId: ID): Promise<void> {
-  const [units, topics] = await Promise.all([readUnits(), readTopics()]);
-  const children = topics.filter((topic) => topic.unitId === unitId);
+  const children = await readTopicRows(unitId);
   const progress =
     children.length > 0 ? children.reduce((sum, topic) => sum + topic.progress, 0) / children.length : 0;
-  const next = units.map((unit) =>
-    unit.id === unitId
-      ? { ...unit, progress, status: statusFromProgress(progress), updatedAt: new Date().toISOString() }
-      : unit,
-  );
-  await writeUnits(next);
+  const { error } = await supabase
+    .from('units')
+    .update({ progress, status: statusFromProgress(progress) })
+    .eq('id', unitId);
+  if (error) throw error;
 }
 
 async function recomputeSubjectProgress(subjectId: ID): Promise<number> {
@@ -359,21 +382,30 @@ async function applySessionOutcome(
   completedIds: ID[],
   date: ISODateString,
 ): Promise<Topic[]> {
-  const topics = await readTopics();
+  if (selectedIds.length === 0) return listBySubject(subjectId);
+
+  const { data: touched, error: readError } = await supabase
+    .from('topics')
+    .select('id, unit_id, progress')
+    .in('id', selectedIds);
+  if (readError) throw readError;
+
   const touchedUnitIds = new Set<ID>();
-  const next = topics.map((topic) => {
-    if (!selectedIds.includes(topic.id)) return topic;
-    touchedUnitIds.add(topic.unitId);
-    const isCompleted = completedIds.includes(topic.id);
-    return {
-      ...topic,
-      status: isCompleted ? ('completed' as const) : ('in-progress' as const),
-      progress: isCompleted ? 1 : Math.max(topic.progress, 0.5),
-      lastSessionAt: date,
-      updatedAt: date,
-    };
-  });
-  await writeTopics(next);
+  await Promise.all(
+    (touched as { id: string; unit_id: string; progress: number }[]).map((topic) => {
+      touchedUnitIds.add(topic.unit_id);
+      const isCompleted = completedIds.includes(topic.id);
+      return supabase
+        .from('topics')
+        .update({
+          status: isCompleted ? 'completed' : 'in-progress',
+          progress: isCompleted ? 1 : Math.max(topic.progress, 0.5),
+          last_session_at: date,
+        })
+        .eq('id', topic.id);
+    }),
+  );
+
   await Promise.all([...touchedUnitIds].map((unitId) => recomputeUnitFromTopics(unitId)));
   return listBySubject(subjectId);
 }

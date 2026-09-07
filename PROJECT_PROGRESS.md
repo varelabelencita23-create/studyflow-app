@@ -1,5 +1,69 @@
 # Progreso del proyecto — StudyFlow
 
+## Etapa completada: 18 — Integración completa con Supabase y persistencia real
+
+Pedido del usuario: reemplazar por completo el almacenamiento local/mock (AsyncStorage como fuente de verdad) por persistencia real contra Supabase (Auth + PostgreSQL + Storage + Row Level Security), sin backend propio, con RLS verdaderamente verificado y sin ninguna funcionalidad final que "parezca" funcionar sin estar realmente conectada. Se hizo en una sola etapa grande porque el cambio es transversal (toca cada servicio existente), pero siguiendo internamente el orden pedido: fundación → auth → cada dominio → archivos → integraciones externas → auditoría final.
+
+### Restricción de entorno descubierta y cómo se manejó
+
+Esta sesión corre en un sandbox en la nube cuyo proxy de salida **bloquea** `supabase.co`/`supabase.com` (403 `connect_rejected` verificado con `curl` directo) y también el CDN de Docker Hub (`production.cloudfront.docker.com`, verificado con `docker pull`). Esto significa que **ningún Supabase real ni Supabase local vía Docker pudo probarse en vivo desde esta sesión** — ni contra un proyecto propio del usuario ni contra un stack local. Se lo planteó al usuario explícitamente vía pregunta directa; su decisión fue: escribir todo el código acá y que él lo pruebe en su propia máquina, y crear un proyecto Supabase nuevo (no tenía uno).
+
+Para no entregar "código que en teoría debería andar" sin ninguna verificación real, se armó un cluster de PostgreSQL 16 real (binarios locales, sin Docker, corriendo como usuario `pguser` sin privilegios) con un **stub mínimo y honesto** de los esquemas `auth` y `storage` de Supabase (incluida una función `auth.uid()` real controlada por una variable de sesión de Postgres) y se corrieron las migraciones SQL reales del proyecto —sin modificarlas— contra esa base. Sobre esa base se simuló multi-usuario real (dos usuarios "Ana" y "Beto" con `set_config('app.current_user', ...)`) y se verificó en serio:
+
+- Ana solo ve/edita sus propias filas en `subjects`; un intento de Beto de leer o escribir una fila de Ana devuelve cero filas / es rechazado por RLS.
+- Un intento de insertar una fila `subjects` con el `user_id` de otro usuario es rechazado por la policy `with check`.
+- Borrar el usuario de `auth.users` (Ana) cascadea correctamente hasta `profiles` y `subjects` — cero registros huérfanos después.
+- Storage: Beto solo lista/lee su propio archivo dentro de su carpeta (`<user_id>/...`); un tercer usuario sin archivos ve una lista vacía y no puede escribir dentro de la carpeta de Beto.
+
+Esto prueba que el **diseño** del esquema y las políticas RLS es correcto (no solo "debería andar"), pero **no reemplaza** que el usuario corra las migraciones contra su proyecto Supabase real y verifique con la app corriendo — eso quedó pendiente y documentado en el reporte final.
+
+### Fundación (`src/lib/supabase.ts` + esquema)
+
+- Cliente único `src/lib/supabase.ts`: `createClient` con `AsyncStorage` como `auth.storage` (persistencia y auto-refresh de sesión), `react-native-url-polyfill/auto` importado primero (requerido por `@supabase/supabase-js` en React Native). Expone `getCurrentUserId()` para que cada servicio arme sus filas con el `user_id` real de la sesión.
+- `.env.example` nuevo (documenta `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY` y por qué la anon key es segura en el bundle dado RLS); `.env` agregado a `.gitignore` junto con `supabase/.branches` y `supabase/.temp`.
+- `supabase/` inicializado con la CLI (`supabase init`) y tres migraciones versionadas en `supabase/migrations/`:
+  - `..._schema.sql`: 19 tablas (`profiles`, `subjects`, `units`, `topics`, `subtopics`, `study_sessions`, `weekly_plans`, `weekly_plan_items`, `content_plan_assignments`, `study_materials`, `exams`, `exam_topics`, `flashcard_decks`, `flashcards`, `quizzes`, `quiz_questions`, `quiz_attempts`, `notification_preferences`, `user_achievements`), todas con `user_id` propio (denormalizado incluso donde ya es alcanzable por FK, a propósito: así cada policy RLS es un chequeo plano `auth.uid() = user_id` sin joins), índices en cada FK, constraints de enum, `ON DELETE CASCADE`/`SET NULL` correctos, trigger `handle_new_user()` que crea la fila `profiles` automáticamente al registrarse.
+  - `..._rls.sql`: RLS habilitado y con policy en las 19 tablas, patrón `using/with check (auth.uid() = user_id)` (o `auth.uid() = id` en `profiles`, cuya PK es el propio id de usuario).
+  - `..._storage.sql`: bucket privado `study-materials` + 4 policies sobre `storage.objects` que exigen que el primer segmento de la ruta (`(storage.foldername(name))[1]`) sea el `auth.uid()` del usuario.
+
+### Servicios reescritos (todos contra Supabase, no contra AsyncStorage)
+
+`authService`, `onboardingService`, `subjectsService`, `contentService` (unidades/temas/subtemas + recómputo de progreso en cascada), `sessionService`, `weeklyPlanService`, `contentPlanService`, `examService`, `flashcardService`, `quizService`, `fileService`, `preferencesService`, `achievementsService`. Todos leen/escriben Postgres vía `supabase.from(tabla)`; los que devolvían "la lista completa después de mutar" (convención ya existente) la siguen devolviendo así para no tener que tocar los call sites en las pantallas. `statsService`/`insightsService` no necesitaron cambios funcionales: ya eran puramente derivados de `sessionService`, que ahora lee de Supabase.
+
+- **Auth real**: `register`/`login`/`logout`/`getSession` contra `supabase.auth`. Si el proyecto tiene confirmación de email activada (default de Supabase), `register` detecta que `data.session` viene `null` y tira un mensaje claro pidiendo confirmar el email, en vez de fingir que la cuenta ya quedó lista.
+- **`AppStateProvider`**: al bootear, primero resuelve la sesión real (`authService.getSession()`) y solo carga datos de usuario si hay sesión; se suscribe a `supabase.auth.onAuthStateChange` para limpiar todo el estado en `SIGNED_OUT` (cierre de sesión real, no solo un flag local); se agregó `logout` al contexto. `addSubject`/`completeOnboarding`/`ensurePlan` ahora tiran error si no hay usuario autenticado, en vez de usar un `'guest'` hardcodeado como antes.
+- **Archivos (`fileService`)**: subida real a Supabase Storage — `fetch(uri).then(r => r.arrayBuffer())` y `supabase.storage.from('study-materials').upload(path, bytes, {contentType})`, con ruta `user_id/subject_id/categoría/archivo`; si falla el insert de metadata en `study_materials` después de subir el archivo, se hace rollback borrando el objeto de Storage (no queda un archivo huérfano en Storage sin fila en Postgres). Lectura vía URLs firmadas (`createSignedUrl`, 10 minutos) abiertas con `Linking.openURL` — el bucket es privado, nunca se expone una URL pública. Selección de archivos reales con `expo-document-picker` (`archivos/[category].tsx`) e imágenes con `expo-image-picker` (cámara/galería, con sus permisos) en vez de los botones que antes solo agregaban una fila falsa.
+- **Google Drive**: reescrito para ser honesto. `driveService.isConfigured()` devuelve `false` siempre (no hay credenciales OAuth de Google Cloud configuradas) y `app/drive.tsx` ya no es un explorador simulado — es una pantalla que dice explícitamente "todavía no está conectado" y lista qué falta exactamente (proyecto de Google Cloud + Drive API habilitada, OAuth Client ID, redirect URI, integración con `expo-auth-session`). No hay ninguna funcionalidad fingida.
+- **Sesión de estudio interrumpida** (`ActiveSessionProvider`): la sesión activa (timer corriendo) se cachea en AsyncStorage en cada cambio — uso legítimo de AsyncStorage como caché efímero, no como base de datos — y se recupera al reabrir la app siempre en pausa (nunca contando como estudiado el tiempo con la app cerrada). Un listener de `AppState` congela el timer al pasar a background/inactive. La sesión solo se vuelve permanente (Supabase) al finalizarla con `finalize()`.
+- **Perfil**: nuevo botón "Cerrar sesión" (sección "Cuenta") que llama a `logout()` (cierra la sesión real de Supabase) — antes solo existía "Reiniciar onboarding", que se mantuvo pero aclarado como herramienta de QA no destructiva (no borra materias/contenido/progreso).
+
+### Auditoría anti-mock (Etapa 17 del spec, aplicada al final de esta migración)
+
+Se buscó `mock`/`fake`/`dummy`/`sample`/hardcode en todo el proyecto y se revisó cada resultado a mano:
+- `generateMockQuestions()` en `quizService.ts`: se mantiene y sigue etiquetado como mock en el código y en la UI ("Generar" arma preguntas de opción múltiple con un algoritmo simple, no con IA) — el spec pide explícitamente **no** fingir una IA real, así que esto se dejó como está, honestamente rotulado, con la arquitectura (`quizzes`/`quiz_questions`) lista para que una generación real por IA solo tenga que reemplazar esa función.
+- `driveService`/`app/drive.tsx`: ver arriba — reescritos para no fingir.
+- Comentarios de código desactualizados corregidos (`SplashView.tsx`, `examService.ts`, `statsService.ts`) que todavía decían "mock"/"local" describiendo código que ya es 100% Supabase.
+- `storage.ts` se recortó al wrapper genérico de AsyncStorage + una sola clave (`activeSessionCache`, caché legítima); se borraron las claves y el `mockNetworkDelay` que ya no se usan.
+
+### Archivos importantes creados/modificados
+
+- Nuevos: `src/lib/supabase.ts`, `.env.example`, `supabase/config.toml`, `supabase/migrations/*_schema.sql`, `*_rls.sql`, `*_storage.sql`, `src/utils/file.ts` (`inferFileKind`).
+- Reescritos: los 13 servicios listados arriba, `src/store/AppStateProvider.tsx`, `src/store/ActiveSessionProvider.tsx`, `src/services/storage.ts`, `app/drive.tsx`.
+- Modificados: `app/(tabs)/_layout.tsx` (gate por sesión real), `app/(tabs)/perfil.tsx` (logout), `app/materia/[id]/archivos/[category].tsx` y `app/parcial/[examId].tsx` (pickers reales + abrir archivo con URL firmada), `app.json` (plugin `expo-image-picker` con permisos en español), `.gitignore`, `README.md`.
+
+### Verificación realizada
+
+- `npx tsc --noEmit` → sin errores, corrido después de cada servicio reescrito y de nuevo al final.
+- `npx expo export --platform android` y `--platform ios` → bundling exitoso (bundles de ~5.2MB/5.3MB) después de todos los cambios.
+- Simulación real multi-usuario de RLS y Storage contra un Postgres 16 local (ver sección de restricción de entorno arriba) — la única forma de "verificación genuina" posible sin acceso de red a Supabase desde este sandbox.
+- **No realizado desde esta sesión** (y así se lo comunica al usuario en el reporte final): correr las migraciones contra un proyecto Supabase real, probar registro/login/CRUD/subida de archivos end-to-end con la app corriendo, y confirmar que los datos sobreviven a cerrar y reabrir la app en un dispositivo/emulador real. Esto requiere que el usuario cree su proyecto Supabase y corra la app en su propia máquina (sin las restricciones de red de este sandbox).
+
+### Siguiente etapa
+
+No quedan etapas pendientes del spec de Supabase. El trabajo que sigue es del usuario: crear el proyecto Supabase, aplicar las migraciones (`supabase db push` o pegarlas en el SQL Editor, en orden), completar `.env`, y probar el flujo completo (registrarse, crear materias/contenido, planificar, estudiar, subir archivos, crear parciales/flashcards/tests, cerrar y reabrir la app) para confirmar en un entorno real lo que acá solo pudo verificarse por inspección de código + simulación local de Postgres.
+
+---
+
 ## Etapa completada: 17 — Pulido final
 
 Pedido del usuario: "necesito que toda la app tenga el mismo estilo iOS hermoso y divino que no haya bugs ni nada". Con las 16 etapas anteriores ya construidas, esta etapa no agrega features nuevas — es una auditoría completa de toda la app (visual, bugs, código muerto, consistencia) seguida de las correcciones. Se usó un agente de exploración de solo lectura para auditar todo `app/` y `src/` contra 7 categorías (inconsistencias visuales, patrones de bug conocidos, completitud del design system, copy pendiente, registro de rutas, estados de carga, haptics), y después se corrigió cada hallazgo real uno por uno.

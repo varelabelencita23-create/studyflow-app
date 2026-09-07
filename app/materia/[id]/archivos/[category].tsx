@@ -1,6 +1,8 @@
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheet, Button, EmptyState, Icon, IconName, Input, SkeletonCard } from '@/components/ui';
 import { Screen } from '@/components/ui/Screen';
 import { useToast } from '@/hooks/useToast';
@@ -8,6 +10,7 @@ import { fileService } from '@/services';
 import { useAppState } from '@/store';
 import { colors, radius, spacing, typography } from '@/theme';
 import { FileKind, FileSource, StudyMaterial } from '@/types';
+import { inferFileKind } from '@/utils';
 
 const FILE_KIND_ICON: Record<FileKind, IconName> = {
   pdf: 'document-outline',
@@ -24,10 +27,10 @@ const FILE_SOURCE_LABEL: Record<FileSource, string> = {
   'google-drive': 'Google Drive',
 };
 
-const ADD_OPTIONS: { source: FileSource; label: string; icon: IconName; kind: FileKind; namePrefix: string; extension: string }[] = [
-  { source: 'device', label: 'Dispositivo', icon: 'folder-open-outline', kind: 'document', namePrefix: 'Documento', extension: 'pdf' },
-  { source: 'camera', label: 'Cámara', icon: 'camera-outline', kind: 'image', namePrefix: 'Foto', extension: 'jpg' },
-  { source: 'gallery', label: 'Galería', icon: 'images-outline', kind: 'image', namePrefix: 'Imagen', extension: 'png' },
+const ADD_OPTIONS: { source: FileSource; label: string; icon: IconName }[] = [
+  { source: 'device', label: 'Dispositivo', icon: 'folder-open-outline' },
+  { source: 'camera', label: 'Cámara', icon: 'camera-outline' },
+  { source: 'gallery', label: 'Galería', icon: 'images-outline' },
 ];
 
 export default function ArchivosCategoryScreen() {
@@ -69,15 +72,55 @@ export default function ArchivosCategoryScreen() {
   }
 
   const handleAdd = async (option: (typeof ADD_OPTIONS)[number]) => {
-    const countSameSource = files.filter((file) => file.source === option.source).length + 1;
-    await fileService.addFile(subjectId, folderDef.category, {
-      name: `${option.namePrefix} ${countSameSource}.${option.extension}`,
-      kind: option.kind,
-      source: option.source,
-    });
     setAddSheetVisible(false);
-    show('Archivo agregado', 'success');
-    load();
+    try {
+      let picked: { uri: string; name: string; mimeType?: string | null } | null = null;
+
+      if (option.source === 'device') {
+        const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+        if (!result.canceled && result.assets[0]) picked = result.assets[0];
+      } else {
+        const permission =
+          option.source === 'camera'
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          show('Necesitamos permiso para continuar', 'error');
+          return;
+        }
+        const result =
+          option.source === 'camera'
+            ? await ImagePicker.launchCameraAsync({ quality: 0.8 })
+            : await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
+        if (!result.canceled && result.assets[0]) {
+          const asset = result.assets[0];
+          picked = { uri: asset.uri, name: asset.fileName ?? `foto-${Date.now()}.jpg`, mimeType: asset.mimeType };
+        }
+      }
+
+      if (!picked) return;
+
+      await fileService.uploadFile(subjectId, folderDef.category, {
+        uri: picked.uri,
+        name: picked.name,
+        mimeType: picked.mimeType ?? undefined,
+        kind: inferFileKind(picked.mimeType, picked.name),
+        source: option.source,
+      });
+      show('Archivo subido', 'success');
+      load();
+    } catch (error) {
+      show(error instanceof Error ? error.message : 'No se pudo subir el archivo', 'error');
+    }
+  };
+
+  const handleOpenFile = async (file: StudyMaterial) => {
+    try {
+      const url = await fileService.getSignedUrl(file);
+      await Linking.openURL(url);
+    } catch (error) {
+      show(error instanceof Error ? error.message : 'No se pudo abrir el archivo', 'error');
+    }
   };
 
   const handleGoToDrive = () => {
@@ -177,6 +220,7 @@ export default function ArchivosCategoryScreen() {
               </View>
             ) : (
               <View style={styles.sheetActions}>
+                <Button label="Abrir archivo" icon="open-outline" fullWidth onPress={() => handleOpenFile(selectedFile)} />
                 <Button label="Renombrar" variant="secondary" fullWidth onPress={() => setRenaming(true)} />
                 <Button label="Eliminar archivo" variant="destructive" fullWidth onPress={handleDelete} />
               </View>

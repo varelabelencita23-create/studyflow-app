@@ -1,5 +1,5 @@
+import { getCurrentUserId, supabase } from '@/lib/supabase';
 import { StudyMode } from '@/types';
-import { STORAGE_KEYS, storage } from './storage';
 
 export interface StudyModeConfig {
   studyMode: StudyMode;
@@ -13,28 +13,53 @@ export const DEFAULT_STUDY_MODE_CONFIG: StudyModeConfig = {
 
 export const onboardingService = {
   async getStudyModeConfig(): Promise<StudyModeConfig> {
-    return (await storage.get<StudyModeConfig>(STORAGE_KEYS.studyModeConfig)) ?? DEFAULT_STUDY_MODE_CONFIG;
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('study_mode, max_subjects_per_week')
+      .eq('id', userId)
+      .single();
+    if (error) throw error;
+    return { studyMode: data.study_mode, maxSubjectsPerWeek: data.max_subjects_per_week };
   },
 
   async setStudyModeConfig(config: StudyModeConfig): Promise<void> {
-    await storage.set(STORAGE_KEYS.studyModeConfig, config);
+    const userId = await getCurrentUserId();
+    const { error } = await supabase
+      .from('profiles')
+      .update({ study_mode: config.studyMode, max_subjects_per_week: config.maxSubjectsPerWeek })
+      .eq('id', userId);
+    if (error) throw error;
   },
 
   async isCompleted(): Promise<boolean> {
-    return (await storage.get<boolean>(STORAGE_KEYS.onboardingCompleted)) ?? false;
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('onboarding_completed_at')
+      .eq('id', userId)
+      .single();
+    if (error) throw error;
+    return !!data.onboarding_completed_at;
   },
 
   async complete(): Promise<void> {
-    await storage.set(STORAGE_KEYS.onboardingCompleted, true);
+    const userId = await getCurrentUserId();
+    const { error } = await supabase
+      .from('profiles')
+      .update({ onboarding_completed_at: new Date().toISOString() })
+      .eq('id', userId);
+    if (error) throw error;
   },
 
-  /** Dev-only helper to replay the onboarding flow from scratch. */
+  /**
+   * QA-only: clears the onboarding flag and signs out so the setup screens
+   * can be replayed. Deliberately does NOT touch subjects/content/sessions —
+   * this is real user data now, not mock data to wipe.
+   */
   async reset(): Promise<void> {
-    await storage.multiRemove([
-      STORAGE_KEYS.session,
-      STORAGE_KEYS.subjects,
-      STORAGE_KEYS.studyModeConfig,
-      STORAGE_KEYS.onboardingCompleted,
-    ]);
+    const userId = await getCurrentUserId();
+    await supabase.from('profiles').update({ onboarding_completed_at: null }).eq('id', userId);
+    await supabase.auth.signOut();
   },
 };

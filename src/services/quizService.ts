@@ -1,35 +1,83 @@
+import { getCurrentUserId, supabase } from '@/lib/supabase';
 import { Difficulty, ID, Quiz, QuizAttempt, QuizQuestion } from '@/types';
-import { generateId } from '@/utils';
-import { STORAGE_KEYS, storage } from './storage';
 
-async function readQuizzes(): Promise<Quiz[]> {
-  return (await storage.get<Quiz[]>(STORAGE_KEYS.quizzes)) ?? [];
+interface QuizRow {
+  id: string;
+  subject_id: string;
+  name: string;
+  difficulty: Difficulty;
+  created_at: string;
+  updated_at: string;
 }
-async function writeQuizzes(quizzes: Quiz[]): Promise<void> {
-  await storage.set(STORAGE_KEYS.quizzes, quizzes);
+
+interface QuestionRow {
+  id: string;
+  quiz_id: string;
+  content_id: string | null;
+  prompt: string;
+  options: string[];
+  correct_option_index: number;
 }
-async function readQuestions(): Promise<QuizQuestion[]> {
-  return (await storage.get<QuizQuestion[]>(STORAGE_KEYS.quizQuestions)) ?? [];
+
+interface AttemptRow {
+  id: string;
+  quiz_id: string;
+  date: string;
+  correct_count: number;
+  total_count: number;
+  answer_index_by_question_id: Record<string, number>;
 }
-async function writeQuestions(questions: QuizQuestion[]): Promise<void> {
-  await storage.set(STORAGE_KEYS.quizQuestions, questions);
+
+function mapQuiz(row: QuizRow, questionIds: ID[]): Quiz {
+  return {
+    id: row.id,
+    subjectId: row.subject_id,
+    name: row.name,
+    difficulty: row.difficulty,
+    questionIds,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
-async function readAttempts(): Promise<QuizAttempt[]> {
-  return (await storage.get<QuizAttempt[]>(STORAGE_KEYS.quizAttempts)) ?? [];
+
+function mapQuestion(row: QuestionRow): QuizQuestion {
+  return {
+    id: row.id,
+    quizId: row.quiz_id,
+    contentId: row.content_id ?? undefined,
+    prompt: row.prompt,
+    options: row.options,
+    correctOptionIndex: row.correct_option_index,
+  };
 }
-async function writeAttempts(attempts: QuizAttempt[]): Promise<void> {
-  await storage.set(STORAGE_KEYS.quizAttempts, attempts);
+
+function mapAttempt(row: AttemptRow): QuizAttempt {
+  return {
+    id: row.id,
+    quizId: row.quiz_id,
+    date: row.date,
+    correctCount: row.correct_count,
+    totalCount: row.total_count,
+    answerIndexByQuestionId: row.answer_index_by_question_id,
+  };
 }
 
 async function listQuizzesBySubject(subjectId: ID): Promise<Quiz[]> {
-  const [quizzes, questions] = await Promise.all([readQuizzes(), readQuestions()]);
-  return quizzes
-    .filter((quiz) => quiz.subjectId === subjectId)
-    .map((quiz) => ({ ...quiz, questionIds: questions.filter((q) => q.quizId === quiz.id).map((q) => q.id) }));
+  const { data, error } = await supabase
+    .from('quizzes')
+    .select('*, quiz_questions(id)')
+    .eq('subject_id', subjectId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as (QuizRow & { quiz_questions: { id: string }[] })[]).map((row) =>
+    mapQuiz(row, row.quiz_questions.map((question) => question.id)),
+  );
 }
 
 async function listQuestionsByQuiz(quizId: ID): Promise<QuizQuestion[]> {
-  return (await readQuestions()).filter((question) => question.quizId === quizId);
+  const { data, error } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quizId);
+  if (error) throw error;
+  return (data as QuestionRow[]).map(mapQuestion);
 }
 
 interface QuizInput {
@@ -38,26 +86,19 @@ interface QuizInput {
 }
 
 async function addQuiz(subjectId: ID, input: QuizInput): Promise<Quiz> {
-  const quizzes = await readQuizzes();
-  const now = new Date().toISOString();
-  const quiz: Quiz = {
-    id: generateId('quiz'),
-    subjectId,
-    name: input.name.trim(),
-    difficulty: input.difficulty,
-    questionIds: [],
-    createdAt: now,
-    updatedAt: now,
-  };
-  await writeQuizzes([...quizzes, quiz]);
-  return quiz;
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('quizzes')
+    .insert({ user_id: userId, subject_id: subjectId, name: input.name.trim(), difficulty: input.difficulty })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapQuiz(data as QuizRow, []);
 }
 
 async function removeQuiz(quizId: ID): Promise<void> {
-  const [quizzes, questions, attempts] = await Promise.all([readQuizzes(), readQuestions(), readAttempts()]);
-  await writeQuizzes(quizzes.filter((quiz) => quiz.id !== quizId));
-  await writeQuestions(questions.filter((question) => question.quizId !== quizId));
-  await writeAttempts(attempts.filter((attempt) => attempt.quizId !== quizId));
+  const { error } = await supabase.from('quizzes').delete().eq('id', quizId);
+  if (error) throw error;
 }
 
 interface QuestionInput {
@@ -68,36 +109,45 @@ interface QuestionInput {
 }
 
 async function addQuestion(quizId: ID, input: QuestionInput): Promise<QuizQuestion> {
-  const questions = await readQuestions();
-  const question: QuizQuestion = {
-    id: generateId('question'),
-    quizId,
-    contentId: input.contentId,
-    prompt: input.prompt.trim(),
-    options: input.options,
-    correctOptionIndex: input.correctOptionIndex,
-  };
-  await writeQuestions([...questions, question]);
-  return question;
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('quiz_questions')
+    .insert({
+      user_id: userId,
+      quiz_id: quizId,
+      content_id: input.contentId ?? null,
+      prompt: input.prompt.trim(),
+      options: input.options,
+      correct_option_index: input.correctOptionIndex,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapQuestion(data as QuestionRow);
 }
 
 async function addQuestionsBulk(quizId: ID, inputs: QuestionInput[]): Promise<QuizQuestion[]> {
-  const questions = await readQuestions();
-  const newQuestions: QuizQuestion[] = inputs.map((input) => ({
-    id: generateId('question'),
-    quizId,
-    contentId: input.contentId,
-    prompt: input.prompt.trim(),
-    options: input.options,
-    correctOptionIndex: input.correctOptionIndex,
-  }));
-  await writeQuestions([...questions, ...newQuestions]);
-  return newQuestions;
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('quiz_questions')
+    .insert(
+      inputs.map((input) => ({
+        user_id: userId,
+        quiz_id: quizId,
+        content_id: input.contentId ?? null,
+        prompt: input.prompt.trim(),
+        options: input.options,
+        correct_option_index: input.correctOptionIndex,
+      })),
+    )
+    .select('*');
+  if (error) throw error;
+  return (data as QuestionRow[]).map(mapQuestion);
 }
 
 async function removeQuestion(id: ID): Promise<void> {
-  const questions = await readQuestions();
-  await writeQuestions(questions.filter((question) => question.id !== id));
+  const { error } = await supabase.from('quiz_questions').delete().eq('id', id);
+  if (error) throw error;
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -146,22 +196,30 @@ async function recordAttempt(
   quizId: ID,
   input: { correctCount: number; totalCount: number; answerIndexByQuestionId: Record<ID, number> },
 ): Promise<QuizAttempt> {
-  const attempts = await readAttempts();
-  const attempt: QuizAttempt = {
-    id: generateId('attempt'),
-    quizId,
-    date: new Date().toISOString(),
-    correctCount: input.correctCount,
-    totalCount: input.totalCount,
-    answerIndexByQuestionId: input.answerIndexByQuestionId,
-  };
-  await writeAttempts([...attempts, attempt]);
-  return attempt;
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .insert({
+      user_id: userId,
+      quiz_id: quizId,
+      correct_count: input.correctCount,
+      total_count: input.totalCount,
+      answer_index_by_question_id: input.answerIndexByQuestionId,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapAttempt(data as AttemptRow);
 }
 
 async function listAttemptsByQuiz(quizId: ID): Promise<QuizAttempt[]> {
-  const attempts = await readAttempts();
-  return attempts.filter((attempt) => attempt.quizId === quizId).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .select('*')
+    .eq('quiz_id', quizId)
+    .order('date', { ascending: false });
+  if (error) throw error;
+  return (data as AttemptRow[]).map(mapAttempt);
 }
 
 export const quizService = {

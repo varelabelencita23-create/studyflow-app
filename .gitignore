@@ -30,8 +30,14 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (real secrets/config — never commit these)
+.env
+.env.local
 .env*.local
+
+# Supabase CLI local dev state
+supabase/.branches
+supabase/.temp
 
 # typescript
 *.tsbuildinfo

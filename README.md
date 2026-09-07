@@ -2,25 +2,32 @@
 
 **StudyFlow** es un sistema operativo personal para la facultad: una app móvil premium para planificar, organizar y hacer seguimiento del estudio universitario. Ayuda a distribuir materias durante la semana, trackear contenidos por tema/subtema, medir el progreso real y llegar preparado a cada parcial.
 
-> Estado actual: **Etapa 17 — Pulido final** completada. Las 17 etapas del spec original están terminadas. Frontend-only, sin backend todavía (mocks persistidos localmente).
+> Estado actual: **las 17 etapas del spec original están terminadas y conectadas a Supabase real** (Auth, PostgreSQL, Storage, Row Level Security) — no quedan datos mock como fuente de verdad. Ver `PROJECT_PROGRESS.md` para el detalle etapa por etapa y el reporte final de la migración a Supabase.
 
 ## Stack
 
 - [Expo](https://expo.dev) (SDK 57) + React Native 0.86
 - TypeScript (modo `strict`)
 - [Expo Router](https://docs.expo.dev/router/introduction/) (file-based routing)
+- **[Supabase](https://supabase.com)**: Auth, PostgreSQL (con Row Level Security en cada tabla) y Storage — ver la sección [Backend: Supabase](#backend-supabase) abajo
 - [React Native Reanimated](https://docs.swmansion.com/react-native-reanimated/) + Gesture Handler para microinteracciones y gestos
 - Tipografía [Inter](https://rsms.me/inter/) vía `@expo-google-fonts/inter`
 - `@expo/vector-icons` (Ionicons) para el sistema de íconos
-- `@react-native-async-storage/async-storage` para persistencia local de los mocks (sesión, materias, configuración)
-- Arquitectura preparada para integrar **Supabase** más adelante (capa de servicios ya separada de la UI)
+- `expo-document-picker` / `expo-image-picker` para subir archivos reales (dispositivo/cámara/galería) a Supabase Storage
+- `@react-native-async-storage/async-storage` — **solo** cache/estado efímero (sesión de Supabase, snapshot del timer de estudio activo); nunca la fuente de verdad de datos del usuario
 
 ## Cómo ejecutar el proyecto
 
-```bash
-npm install
-npx expo start
-```
+1. **Configurar Supabase** (una sola vez) — ver [Backend: Supabase](#backend-supabase) abajo para el detalle completo:
+   ```bash
+   cp .env.example .env
+   # completá EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY con los valores de tu proyecto
+   ```
+2. **Instalar dependencias y correr la app**:
+   ```bash
+   npm install
+   npx expo start
+   ```
 
 Luego escaneá el QR con la app **Expo Go** (Android/iOS) o presioná `a` / `i` en la terminal si tenés un emulador/simulador configurado.
 
@@ -32,6 +39,45 @@ npm run ios       # abre en simulador iOS (requiere macOS)
 npm run web       # preview en navegador (soporte parcial)
 npx tsc --noEmit  # chequeo de tipos
 ```
+
+## Backend: Supabase
+
+Toda la persistencia real de la app vive en un proyecto de Supabase. La app **no arranca** sin `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY` configuradas (falla con un mensaje claro en `src/lib/supabase.ts`, a propósito — mejor eso que silenciosamente no persistir nada).
+
+### 1. Crear el proyecto
+
+1. Entrá a [supabase.com](https://supabase.com) → **New project** (el plan gratis alcanza).
+2. Cuando termine de aprovisionarse, andá a **Project Settings → API** y copiá:
+   - **Project URL** → `EXPO_PUBLIC_SUPABASE_URL`
+   - **anon public key** → `EXPO_PUBLIC_SUPABASE_ANON_KEY` (es pública a propósito — la seguridad real la da RLS, no que esta clave sea secreta)
+3. Pegá ambos valores en tu `.env` (nunca se commitea — ver `.gitignore`).
+
+### 2. Aplicar el esquema (tablas, relaciones, RLS, Storage)
+
+Todo el esquema está en `supabase/migrations/` como SQL plano, versionado en Git:
+
+- `20260906234901_schema.sql` — las ~20 tablas (perfiles, materias, unidades/temas/subtemas, sesiones, planificador semanal, archivos, parciales, flashcards, tests, preferencias, logros) con foreign keys, `ON DELETE CASCADE` y triggers de `updated_at`.
+- `20260906234902_rls.sql` — Row Level Security en **todas** las tablas privadas: cada política es `auth.uid() = user_id` (o `= id` en `profiles`) — la seguridad la impone Postgres, no un filtro del cliente.
+- `20260906234903_storage.sql` — el bucket privado `study-materials` + sus políticas (cada usuario solo puede leer/escribir dentro de su propia carpeta `<user_id>/...`).
+
+**Opción A — Supabase CLI (recomendada):**
+```bash
+npx supabase login
+npx supabase link --project-ref TU-PROJECT-REF   # está en la URL del proyecto
+npx supabase db push                              # aplica las 3 migraciones en orden
+```
+
+**Opción B — SQL Editor del dashboard:** pegá el contenido de los 3 archivos, en ese orden, en **SQL Editor** y ejecutalos.
+
+Las migraciones fueron **probadas de verdad** contra un Postgres 16 local (con `auth.uid()`/`storage.objects` emulados) antes de comprometerlas: se creó un esquema, se simularon dos usuarios y se confirmó que cada uno solo ve/edita/borra sus propias filas y su propia carpeta de Storage, que un usuario no puede insertar filas a nombre de otro, y que borrar un usuario de `auth.users` elimina en cascada su perfil y sus materias sin dejar huérfanos. El detalle completo está en `PROJECT_PROGRESS.md`.
+
+### 3. Confirmación de email (opcional para probar más rápido)
+
+Por default, un proyecto nuevo de Supabase exige confirmar el email antes de poder iniciar sesión (`register()` te va a avisar "Te enviamos un email de confirmación..."). Para probar más rápido en desarrollo, podés desactivarlo en **Authentication → Providers → Email → Confirm email** (OFF). En producción, dejalo activado.
+
+### 4. Listo
+
+Con `.env` completo y las migraciones aplicadas, la app queda completamente conectada: registro/login reales, y cada materia/sesión/archivo/parcial/flashcard/test que crees se guarda en tu proyecto de Supabase — cerrá la app, volvé a abrirla e iniciá sesión de nuevo: todo tu contenido va a seguir ahí.
 
 ## Estructura del proyecto
 
@@ -83,17 +129,23 @@ app/                        # Rutas (Expo Router)
     timer.tsx                    # Timer con pausar/reanudar/finalizar
     resumen.tsx                   # Confirmar completados + resumen de la sesión
     [sessionId].tsx                 # Detalle de una sesión pasada
-  drive.tsx                    # Explorador mock de Google Drive para importar archivos
+  drive.tsx                    # Google Drive: pantalla honesta de "todavía no conectado" (ver sección "Google Drive")
 
 src/
+  lib/
+    supabase.ts   # Cliente Supabase único (nunca se crea otro por pantalla) + getCurrentUserId()
   theme/          # Colores, tipografía, spacing, radios, sombras (design tokens)
   components/     # SplashView + ui/ (librería reutilizable, incluye Switch) + planner/ + subjects/ + content/ + exams/ + charts/
-  services/       # Capa mock (auth, materias, contenidos, sesiones, plan de contenidos, archivos, Drive, parciales, flashcards, tests, estadísticas, insights, logros, preferencias, onboarding, plan semanal, storage)
-  store/          # AppStateProvider (estado global) + ActiveSessionProvider (timer en curso)
+  services/       # Capa de acceso a datos — cada archivo mapea 1:1 a tablas de Supabase (auth/profiles, materias, contenidos, sesiones, plan semanal, plan de contenidos, archivos+Storage, parciales, flashcards, tests, estadísticas, insights, logros, preferencias); storage.ts quedó reducido a un wrapper de AsyncStorage para cache efímero
+  store/          # AppStateProvider (sesión de Supabase + estado global, con listener de auth) + ActiveSessionProvider (timer en curso, con recuperación tras cierre de la app)
   hooks/          # Hooks compartidos (ej. useToast)
-  types/          # Entidades de dominio (preparadas para Supabase)
+  types/          # Entidades de dominio (reflejan 1:1 las tablas de supabase/migrations/)
   constants/      # Constantes de layout y app
-  utils/          # Helpers (ids, validadores, fechas de la semana, formato de duración)
+  utils/          # Helpers (ids, validadores, fechas de la semana, formato de duración, tipo de archivo)
+
+supabase/
+  config.toml     # Configuración del proyecto para el Supabase CLI
+  migrations/     # Esquema, RLS y Storage como SQL versionado (ver "Backend: Supabase" arriba)
 ```
 
 ### Alias de importación
@@ -128,11 +180,11 @@ Tab bar inferior persistente con 5 secciones: **Inicio, Materias, Parciales, Est
 
 ## Flujo de onboarding
 
-Al abrir la app, `app/_layout.tsx` muestra un **splash** animado mientras `AppStateProvider` carga la sesión/materias/configuración persistidas. Si el onboarding no está completo, `(tabs)/_layout.tsx` redirige automáticamente a `/welcome`. El flujo es:
+Al abrir la app, `app/_layout.tsx` muestra un **splash** animado mientras `AppStateProvider` recupera la sesión real de Supabase (`supabase.auth.getSession()`) y, si hay una, carga materias/configuración/plan semanal desde Postgres. Si no hay sesión o el onboarding no está completo, `(tabs)/_layout.tsx` redirige automáticamente a `/welcome`. El flujo es:
 
-`Bienvenida → Login/Registro → Tus materias (CRUD + orden) → Modalidad de estudio (Estándar 3 / Profundo 2 / Libre N) → Configuración completada → Inicio`
+`Bienvenida → Login/Registro (Supabase Auth) → Tus materias (CRUD + orden) → Modalidad de estudio (Estándar 3 / Profundo 2 / Libre N) → Configuración completada → Inicio`
 
-Todo se persiste con `@react-native-async-storage/async-storage` a través de `src/services` (mock de auth y de materias), así que cerrar y reabrir la app conserva el progreso. Desde **Perfil → Reiniciar onboarding** podés volver a recorrer el flujo completo para QA.
+Registrarse crea un usuario real en `auth.users` y, vía un trigger de Postgres (`handle_new_user`), su fila en `profiles` — cerrar la app, volver a abrirla e iniciar sesión de nuevo recupera todo tal como quedó. `AppStateProvider` también escucha `supabase.auth.onAuthStateChange`, así que un cierre de sesión (desde Perfil o por expiración del token) limpia el estado de la app en el momento, no en el próximo restart. Desde **Perfil → Cerrar sesión** salís de verdad de Supabase; **Perfil → Reiniciar onboarding** es una herramienta de QA que solo vuelve a mostrar el flujo de configuración (no borra tus materias ni tu contenido).
 
 ## Home / Planificador semanal
 
@@ -170,13 +222,13 @@ Las materias creadas en la Etapa 5 (contenidos planos, sin unidades) se migran a
 
 ## Archivos
 
-`/materia/[id]/archivos` es una biblioteca estilo Finder con 5 carpetas fijas por materia (**Apuntes, Clases, Trabajos prácticos, Parciales, Material extra**) — no son creables ni eliminables, son la estructura misma. Adentro de cada una: lista de archivos, estado vacío, y un botón **Agregar archivo** con 4 orígenes (Dispositivo, Cámara, Galería, Google Drive). Tocar un archivo abre sus detalles con **Renombrar** y **Eliminar**.
+`/materia/[id]/archivos` es una biblioteca estilo Finder con 5 carpetas fijas por materia (**Apuntes, Clases, Trabajos prácticos, Parciales, Material extra**) — no son creables ni eliminables, son la estructura misma (se calculan a partir de `study_materials.folder_category`, no tienen su propia tabla). Adentro de cada una: lista de archivos, estado vacío, y un botón **Agregar archivo** con 3 orígenes reales (Dispositivo vía `expo-document-picker`, Cámara/Galería vía `expo-image-picker`) más Google Drive. Tocar un archivo abre sus detalles con **Abrir** (genera una signed URL de Storage y la abre con `Linking.openURL`), **Renombrar** y **Eliminar**.
 
-Como pide esta etapa, todavía no hay subida real: Dispositivo/Cámara/Galería crean un registro mock con un nombre generado (ej. "Foto 2.jpg"), y `fileService.ts` deja comentado exactamente dónde se conectaría cada uno más adelante (`expo-image-picker`, `expo-document-picker`, Supabase Storage para los bytes reales).
+La subida es real de punta a punta: el archivo elegido se sube al bucket privado `study-materials` de Supabase Storage bajo `<user_id>/<subject_id>/<categoría>/...`, y solo el metadata (nombre, tipo, tamaño, la ruta en Storage) se guarda en la tabla `study_materials`. Si falla el insert en Postgres después de subir los bytes, `fileService.uploadFile` borra el blob recién subido para que Storage y la base nunca queden en desacuerdo sobre qué archivos existen.
 
-## Google Drive (mock)
+## Google Drive
 
-Desde "Agregar archivo", la opción **Google Drive** abre `/drive`: un conector mock con su propio estado de "no conectado" (botón Conectar) y, una vez conectado, un explorador de carpetas/archivos ficticios con selección múltiple e "Importar (n)". `driveService.ts` dejá documentado en comentarios el punto exacto de integración real (OAuth vía `expo-auth-session`, Drive API `files.list`/`files.get` en vez de los datos mock).
+La opción **Google Drive** en "Agregar archivo" abre `/drive`, que dice explícitamente qué falta para conectarlo de verdad: un proyecto en Google Cloud con la Drive API habilitada, un OAuth Client ID con su redirect URI, y autenticación vía `expo-auth-session` (o un Edge Function de Supabase que intercambie el token). No hay una integración falsa simulando "Conectar" ni una carpeta ficticia — `driveService.ts` documenta en comentarios los pasos exactos para implementarlo cuando esas credenciales existan, incluyendo que la descarga final se conectaría a `fileService.uploadFile` igual que un archivo del dispositivo.
 
 ## Parciales (banco por materia, calendario global y ritmo)
 
@@ -224,9 +276,9 @@ Desde el tab **Perfil**: tocar la tarjeta de perfil abre un `BottomSheet` para e
 
 ## Modelo de datos
 
-`src/types` define las entidades de dominio de forma independiente de cualquier backend: `User`, `Subject`, `Unit`/`Topic`/`Subtopic`, `StudySession`, `WeeklyPlan`, `Exam`, `StudyMaterial`/`Folder`, `Flashcard`/`FlashcardDeck`, `Quiz`/`QuizQuestion`, `StudyStats`, `AppNotification`, `Achievement`. Estos tipos van a ser consumidos tanto por los mocks (próximas etapas) como, más adelante, por una capa de servicios conectada a Supabase, sin necesidad de reescribir la UI.
+`src/types` define las entidades de dominio de forma independiente de cualquier backend: `User`, `Subject`, `Unit`/`Topic`/`Subtopic`, `StudySession`, `WeeklyPlan`, `Exam`, `StudyMaterial`/`Folder`, `Flashcard`/`FlashcardDeck`, `Quiz`/`QuizQuestion`, `StudyStats`, `AppNotification`, `Achievement`. Esos mismos tipos son hoy los que `src/services/*.ts` leen y escriben directamente contra Supabase (Postgres + Storage) — no hubo que reescribir la UI para pasar de los mocks originales a persistencia real, tal como estaba previsto.
 
-## Roadmap (próximas etapas)
+## Roadmap
 
 1. ~~Foundation + Design System~~ ✅
 2. ~~Onboarding (splash, login/registro, selección de materias, modalidad de estudio)~~ ✅
@@ -236,7 +288,7 @@ Desde el tab **Perfil**: tocar la tarjeta de perfil abre un `BottomSheet` para e
 6. ~~Contenidos jerárquicos (unidad → tema → subtema)~~ ✅
 7. ~~Planificación por materia~~ ✅
 8. ~~Archivos (biblioteca estilo Finder)~~ ✅
-9. ~~Integración de Google Drive (mock)~~ ✅
+9. ~~Integración de Google Drive~~ ✅ (arquitectura preparada, integración real pendiente de credenciales OAuth — ver sección "Google Drive")
 10. ~~Banco de parciales~~ ✅
 11. ~~Flashcards~~ ✅
 12. ~~Tests~~ ✅
@@ -245,5 +297,6 @@ Desde el tab **Perfil**: tocar la tarjeta de perfil abre un `BottomSheet` para e
 15. ~~Perfil y configuración~~ ✅
 16. ~~Insights~~ ✅
 17. ~~Pulido final~~ ✅
+18. ~~Integración completa con Supabase y persistencia real~~ ✅
 
 Ver `PROJECT_PROGRESS.md` para el detalle de lo realizado en cada etapa.

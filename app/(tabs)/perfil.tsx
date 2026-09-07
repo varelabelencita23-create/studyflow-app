@@ -17,7 +17,7 @@ const STUDY_MODE_LABEL: Record<StudyMode, string> = {
 
 export default function PerfilScreen() {
   const router = useRouter();
-  const { user, subjects, studyModeConfig, resetOnboarding, updateUser } = useAppState();
+  const { user, subjects, studyModeConfig, resetOnboarding, updateUser, logout } = useAppState();
   const { show } = useToast();
 
   const [editVisible, setEditVisible] = useState(false);
@@ -66,6 +66,20 @@ export default function PerfilScreen() {
     await resetOnboarding();
     show('Onboarding reiniciado', 'default');
     router.replace('/welcome');
+  };
+
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+      router.replace('/welcome');
+    } catch (error) {
+      show(error instanceof Error ? error.message : 'No se pudo cerrar sesión', 'error');
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   return (
@@ -144,6 +158,18 @@ export default function PerfilScreen() {
             />
           </View>
         </Card>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Cuenta</Text>
+        <Button
+          label="Cerrar sesión"
+          variant="destructive"
+          icon="log-out-outline"
+          fullWidth
+          loading={loggingOut}
+          onPress={handleLogout}
+        />
       </View>
 
       <View style={styles.devSection}>

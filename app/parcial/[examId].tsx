@@ -1,6 +1,8 @@
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Badge, BadgeVariant, BottomSheet, Button, Card, Icon, IconName, ProgressBar } from '@/components/ui';
 import { ExamFormSheet } from '@/components/exams';
 import { Screen } from '@/components/ui/Screen';
@@ -9,6 +11,7 @@ import { contentService, examService, fileService } from '@/services';
 import { useAppState } from '@/store';
 import { colors, radius, spacing, typography } from '@/theme';
 import { Exam, ExamPace, ExamReadiness, ExamType, StudyMaterial, Topic } from '@/types';
+import { inferFileKind } from '@/utils';
 
 const TYPE_LABEL: Record<ExamType, string> = {
   parcial: 'Parcial',
@@ -23,10 +26,10 @@ const PACE_INFO: Record<ExamPace, { label: string; variant: BadgeVariant }> = {
   behind: { label: 'Estás atrasada', variant: 'danger' },
 };
 
-const ADD_FILE_OPTIONS: { source: 'device' | 'camera' | 'gallery'; label: string; icon: IconName; kind: 'document' | 'image'; namePrefix: string; extension: string }[] = [
-  { source: 'device', label: 'Dispositivo', icon: 'folder-open-outline', kind: 'document', namePrefix: 'Parcial', extension: 'pdf' },
-  { source: 'camera', label: 'Cámara', icon: 'camera-outline', kind: 'image', namePrefix: 'Foto parcial', extension: 'jpg' },
-  { source: 'gallery', label: 'Galería', icon: 'images-outline', kind: 'image', namePrefix: 'Imagen parcial', extension: 'png' },
+const ADD_FILE_OPTIONS: { source: 'device' | 'camera' | 'gallery'; label: string; icon: IconName }[] = [
+  { source: 'device', label: 'Dispositivo', icon: 'folder-open-outline' },
+  { source: 'camera', label: 'Cámara', icon: 'camera-outline' },
+  { source: 'gallery', label: 'Galería', icon: 'images-outline' },
 ];
 
 export default function ExamDetailScreen() {
@@ -115,15 +118,57 @@ export default function ExamDetailScreen() {
   };
 
   const handleAddFile = async (option: (typeof ADD_FILE_OPTIONS)[number]) => {
-    const created = await fileService.addFile(exam.subjectId, 'parciales', {
-      name: `${option.namePrefix}.${option.extension}`,
-      kind: option.kind,
-      source: option.source,
-    });
-    await examService.attachMaterial(exam.id, created.id);
     setAddFileVisible(false);
-    show('Archivo adjuntado', 'success');
-    load();
+    try {
+      let picked: { uri: string; name: string; mimeType?: string | null } | null = null;
+
+      if (option.source === 'device') {
+        const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+        if (!result.canceled && result.assets[0]) picked = result.assets[0];
+      } else {
+        const permission =
+          option.source === 'camera'
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          show('Necesitamos permiso para continuar', 'error');
+          return;
+        }
+        const result =
+          option.source === 'camera'
+            ? await ImagePicker.launchCameraAsync({ quality: 0.8 })
+            : await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
+        if (!result.canceled && result.assets[0]) {
+          const asset = result.assets[0];
+          picked = { uri: asset.uri, name: asset.fileName ?? `parcial-${Date.now()}.jpg`, mimeType: asset.mimeType };
+        }
+      }
+
+      if (!picked) return;
+
+      const created = await fileService.uploadFile(exam.subjectId, 'parciales', {
+        uri: picked.uri,
+        name: picked.name,
+        mimeType: picked.mimeType ?? undefined,
+        kind: inferFileKind(picked.mimeType, picked.name),
+        source: option.source,
+      });
+      await examService.attachMaterial(exam.id, created.id);
+      show('Archivo adjuntado', 'success');
+      load();
+    } catch (error) {
+      show(error instanceof Error ? error.message : 'No se pudo adjuntar el archivo', 'error');
+    }
+  };
+
+  const handleOpenMaterial = async () => {
+    if (!material) return;
+    try {
+      const url = await fileService.getSignedUrl(material);
+      await Linking.openURL(url);
+    } catch (error) {
+      show(error instanceof Error ? error.message : 'No se pudo abrir el archivo', 'error');
+    }
   };
 
   return (
@@ -191,12 +236,13 @@ export default function ExamDetailScreen() {
           {!material && <Button label="Adjuntar" variant="ghost" size="sm" onPress={() => setAddFileVisible(true)} />}
         </View>
         {material ? (
-          <View style={styles.fileCard}>
+          <Pressable style={styles.fileCard} onPress={handleOpenMaterial}>
             <View style={styles.fileIcon}>
               <Icon name="document-outline" size={18} color={colors.accent} />
             </View>
             <Text style={styles.fileName} numberOfLines={1}>{material.name}</Text>
-          </View>
+            <Icon name="open-outline" size={16} color={colors.textTertiary} />
+          </Pressable>
         ) : (
           <Text style={styles.emptyHint}>Sin archivo adjunto.</Text>
         )}

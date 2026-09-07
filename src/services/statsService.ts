@@ -31,9 +31,8 @@ export interface SubjectTimeBreakdown {
 }
 
 /**
- * Aggregates real `StudySession` records (all local/mock data today) into the
- * shapes the Estadísticas dashboard renders. Swapping the underlying storage
- * for Supabase later only changes `sessionService`, not this aggregation.
+ * Aggregates real `StudySession` records from Supabase into the shapes the
+ * Estadísticas dashboard renders — nothing here is hardcoded or invented.
  */
 async function getOverview(): Promise<StatsOverview> {
   const sessions = await sessionService.listAll();

@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 import { colors, radius, spacing, typography } from '@/theme';
 
 /**
- * Branded splash rendered while the app bootstraps its mock persisted
+ * Branded splash rendered while the app bootstraps its Supabase-backed
  * state (session, subjects, onboarding status). The native splash screen
  * (see app.json) covers the very first paint; this takes over once the JS
  * bundle is running, until AppStateProvider finishes loading.
